@@ -117,6 +117,29 @@ export default function FeatureBento() {
           </div>
 
         </div>
+
+        {/* Supported Blockchains Section */}
+        <div className="text-center mt-20">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">
+          More Chains Coming in Soon...
+          </h2>
+          
+          <div className="mb-6">
+            <img 
+              src="/other-chains.svg" 
+              alt="Supported blockchain networks" 
+              className="mx-auto max-w-full h-auto"
+            />
+          </div>
+          
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+          Expanding to more networks for faster, cheaper,<br />
+          and wider reach — so you can transact and build on your favorite <br /> blockchain.
+          </p>
+
+          <button className="border border-[#622DBF] py-2 px-12 mt-10 rounded-md -rotate-4">Coming Soon !!</button>
+        </div>
+
       </div>
     </section>
   )
