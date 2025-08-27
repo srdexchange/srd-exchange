@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWalletManager } from '@/hooks/useWalletManager'
 import { useUserOrders } from '@/hooks/useUserOrders'
+import { useRates } from '@/hooks/useRates'
 import BuyCDMModal from './modal/buy-cdm'
 import BuyUPIModal from './modal/buy-upi'
 import SellUPIModal from './modal/sell-upi'
@@ -35,9 +36,13 @@ export default function BuySellSection() {
     refetch: refetchOrders 
   } = useUserOrders()
 
-  // Buy and Sell prices from the display
-  const buyPrice = 85.6
-  const sellPrice = 85.6
+  // Get dynamic rates
+  const { getBuyRate, getSellRate, loading: ratesLoading } = useRates()
+
+  // Get rates based on payment method (default to UPI)
+  const currentPaymentMethod = paymentMethod === 'cdm' ? 'CDM' : 'UPI'
+  const buyPrice = getBuyRate(currentPaymentMethod)
+  const sellPrice = getSellRate(currentPaymentMethod)
 
   // Helper functions
   const calculateUSDT = (rupeeAmount: string) => {
@@ -245,17 +250,22 @@ export default function BuySellSection() {
                 <img src="/buy.svg" alt="" className='w-4 h-4 sm:w-5 sm:h-5'/>
                 <span className="text-xs sm:text-sm text-white">Buy Price</span>
               </div>
-              <div className="text-xl sm:text-2xl font-bold text-center">85.6 ₹</div>
+              <div className="text-xl sm:text-2xl font-bold text-center">
+                {ratesLoading ? '...' : `${buyPrice} ₹`}
+              </div>
             </div>
             <div className="border border-[#3E3E3E] rounded-md py-3 sm:py-4 px-2 min-w-[100px] sm:min-w-[120px]">
               <div className="flex items-center justify-center space-x-1 sm:space-x-2">
                 <img src="/sell.svg" alt="" className='w-4 h-4 sm:w-5 sm:h-5'/>
                 <span className="text-xs sm:text-sm text-white">Sell Price</span>
               </div>
-              <div className="text-xl sm:text-2xl font-bold text-center">85.6 ₹</div>
+              <div className="text-xl sm:text-2xl font-bold text-center">
+                {ratesLoading ? '...' : `${sellPrice} ₹`}
+              </div>
             </div>
           </motion.div>
 
+          {/* Rest of your existing components... */}
           {/* Buy/Sell Tabs */}
           <motion.div 
             className="flex space-x-3 sm:space-x-6 max-w-lg mx-auto mb-6 sm:mb-8"
@@ -288,6 +298,7 @@ export default function BuySellSection() {
             </motion.button>
           </motion.div>
 
+          {/* Continue with rest of existing components... */}
           {/* Payment Method Selection */}
           <AnimatePresence>
             {activeTab && (
@@ -379,6 +390,7 @@ export default function BuySellSection() {
             )}
           </AnimatePresence>
 
+          {/* Continue with amount input and rest of components... */}
           {/* Amount Input Section */}
           <AnimatePresence>
             {activeTab && paymentMethod && (

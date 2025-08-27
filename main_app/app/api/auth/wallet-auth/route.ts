@@ -150,11 +150,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to determine user role
 function determineUserRole(walletAddress: string): 'USER' | 'ADMIN' {
-  // Define admin wallet addresses here - Add your admin wallet addresses
   const adminWallets = [
-   '0x3d2AF21E067675967fb6C35707d8C073Dc203721',
+   '0xC16e1A366Cc174af12F8f343B9Aed84eB26298fF',
     '0x34d7cd03fb8252ab38b0102373150cc4cfd337b9',
   ]
 

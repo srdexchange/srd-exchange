@@ -50,10 +50,27 @@ model Order {
   adminUpiId        String?     // UPI ID provided by admin
   adminBankDetails  String?     // Bank details provided by admin
   adminNotes        String?
+  buyRate           Decimal?    // Rate at which order was created
+  sellRate          Decimal?    // Rate at which order was created
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   
   @@map("orders")
+}
+
+// New model for storing current rates
+model Rate {
+  id          String      @id @default(cuid())
+  type        RateType    
+  currency    CurrencyType @default(UPI)
+  buyRate     Decimal
+  sellRate    Decimal
+  updatedBy   String      // Admin user ID who updated the rate
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  @@unique([type, currency]) // Only one rate per type-currency combination
+  @@map("rates")
 }
 
 enum UserRole {
@@ -73,4 +90,13 @@ enum OrderStatus {
   PAYMENT_SUBMITTED
   COMPLETED
   CANCELLED
+}
+
+enum RateType {
+  CURRENT
+}
+
+enum CurrencyType {
+  UPI
+  CDM
 }

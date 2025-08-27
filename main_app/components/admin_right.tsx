@@ -1,15 +1,62 @@
 'use client'
 
-import { useState } from 'react'
-import { User, FileText, Copy } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, FileText, Copy, CheckCircle, AlertTriangle } from 'lucide-react'
+import { useRates } from 'hooks/useRates'
+import { useAdminRates } from 'hooks/useAdminRates'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function AdminRight() {
   const [activeTab, setActiveTab] = useState('UPI')
-  const [userDetailsTab, setUserDetailsTab] = useState('BANK') // Add state for user details tab
-  const [currentBuyRate, setCurrentBuyRate] = useState('91.5')
-  const [currentSellRate, setCurrentSellRate] = useState('91.8')
+  const [userDetailsTab, setUserDetailsTab] = useState('BANK')
   const [newBuyRate, setNewBuyRate] = useState('')
   const [newSellRate, setNewSellRate] = useState('')
+  const [updateSuccess, setUpdateSuccess] = useState(false)
+
+  const { rates, loading, refetch } = useRates()
+  const { updateRates, loading: updating, error: updateError } = useAdminRates()
+
+  // Get current rates for selected currency
+  const currentRate = rates.find(rate => rate.currency === activeTab)
+  const currentBuyRate = currentRate?.buyRate.toString() || '85.6'
+  const currentSellRate = currentRate?.sellRate.toString() || '85.6'
+
+  // Reset input fields when tab changes
+  useEffect(() => {
+    setNewBuyRate('')
+    setNewSellRate('')
+    setUpdateSuccess(false)
+  }, [activeTab])
+
+  const handleUpdatePrice = async () => {
+    if (!newBuyRate || !newSellRate) {
+      return
+    }
+
+    try {
+      await updateRates(activeTab as 'UPI' | 'CDM', newBuyRate, newSellRate)
+      await refetch() // Refresh rates
+      setNewBuyRate('')
+      setNewSellRate('')
+      setUpdateSuccess(true)
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => setUpdateSuccess(false), 3000)
+    } catch (error) {
+      console.error('Failed to update rates:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-[#141414] text-white h-full py-4 px-2 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-gray-400">Loading rates...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-[#141414] text-white h-full py-4 px-2 space-y-6 overflow-y-auto font-montserrat">
@@ -42,7 +89,7 @@ export default function AdminRight() {
         {/* Rate Management Header */}
         <div className="text-center mb-6">
           <h2 className="text-xl font-semibold text-white mb-1 font-montserrat">Rate Management</h2>
-          <p className="text-gray-400 text-sm font-montserrat">Update Buy and Sell rates for USDT</p>
+          <p className="text-gray-400 text-sm font-montserrat">Update Buy and Sell rates for USDT ({activeTab})</p>
         </div>
 
         {/* Current Rates */}
@@ -64,11 +111,12 @@ export default function AdminRight() {
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-montserrat">₹</span>
               <input
-                type="text"
+                type="number"
+                step="0.01"
                 value={newBuyRate}
                 onChange={(e) => setNewBuyRate(e.target.value)}
                 className="w-full bg-[#1E1C1C] border border-gray-600/50 rounded-md py-2 pl-7 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-[#622DBF] focus:ring-1 focus:ring-purple-500/20 font-montserrat"
-                placeholder=""
+                placeholder={currentBuyRate}
               />
             </div>
           </div>
@@ -77,19 +125,67 @@ export default function AdminRight() {
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-montserrat">₹</span>
               <input
-                type="text"
+                type="number"
+                step="0.01"
                 value={newSellRate}
                 onChange={(e) => setNewSellRate(e.target.value)}
                 className="w-full bg-[#1E1C1C] border border-gray-600/50 rounded-md py-2 pl-7 pr-4 text-white placeholder-gray-400 focus:outline-none focus:border-[#622DBF] focus:ring-1 focus:ring-purple-500/20 font-montserrat"
-                placeholder=""
+                placeholder={currentSellRate}
               />
             </div>
           </div>
         </div>
 
+        {/* Error Display */}
+        <AnimatePresence>
+          {updateError && (
+            <motion.div
+              className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-md"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <p className="text-red-400 text-sm font-montserrat">{updateError}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Success Display */}
+        <AnimatePresence>
+          {updateSuccess && (
+            <motion.div
+              className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <p className="text-green-400 text-sm font-montserrat">
+                  {activeTab} rates updated successfully!
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Update Price Button */}
-        <button className="w-full bg-[#622DBF] hover:bg-purple-700 text-white py-3 px-6 rounded-md font-bold transition-all shadow-lg shadow-purple-600/25 font-montserrat">
-          Update Price
+        <button 
+          onClick={handleUpdatePrice}
+          disabled={updating || !newBuyRate || !newSellRate}
+          className="w-full bg-[#622DBF] hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 px-6 rounded-md font-bold transition-all shadow-lg shadow-purple-600/25 font-montserrat"
+        >
+          {updating ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>Updating...</span>
+            </div>
+          ) : (
+            'Update Price'
+          )}
         </button>
       </div>
 
