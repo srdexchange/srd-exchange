@@ -7,8 +7,10 @@ export async function POST(request: NextRequest) {
   try {
     const { walletAddress, upiId, bankDetails } = await request.json();
 
-    // Validate required fields
-    if (!walletAddress || !upiId) {
+    console.log("Complete profile request:", { walletAddress, upiId, hasBankDetails: !!bankDetails });
+
+    // Validate required fields - Only UPI ID is required for profile completion
+    if (!walletAddress || !upiId || !upiId.trim()) {
       return NextResponse.json(
         { error: "Wallet address and UPI ID are required" },
         { status: 400 }
@@ -16,37 +18,40 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user exists
-    let user = await prisma.user.findUnique({
-      where: { walletAddress },
+    const existingUser = await prisma.user.findUnique({
+      where: { walletAddress: walletAddress.toLowerCase() },
       include: { bankDetails: true }
     });
 
-    if (!user) {
-      // Create new user if doesn't exist
-      user = await prisma.user.create({
-        data: {
-          walletAddress,
-          upiId,
-          profileCompleted: true,
-          lastLoginAt: new Date(),
-        },
-        include: { bankDetails: true }
-      });
-    } else {
-      // Update existing user
-      user = await prisma.user.update({
-        where: { walletAddress },
-        data: {
-          upiId,
-          profileCompleted: true,
-          lastLoginAt: new Date(),
-        },
-        include: { bankDetails: true }
-      });
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: "User not found. Please register first." },
+        { status: 404 }
+      );
     }
 
-    // Handle bank details if provided
-    if (bankDetails && bankDetails.accountNumber && bankDetails.ifscCode && bankDetails.branchName && bankDetails.accountHolderName) {
+    // Update existing user - Profile is completed with just UPI ID
+    const user = await prisma.user.update({
+      where: { walletAddress: walletAddress.toLowerCase() },
+      data: {
+        upiId: upiId.trim(),
+        profileCompleted: true, // Always mark as completed when UPI ID is saved
+        lastLoginAt: new Date(),
+      },
+      include: { bankDetails: true }
+    });
+
+    console.log("User updated with profile completed:", user.profileCompleted);
+
+    // Handle bank details only if provided and complete
+    if (bankDetails && 
+        bankDetails.accountNumber && 
+        bankDetails.ifscCode && 
+        bankDetails.branchName && 
+        bankDetails.accountHolderName) {
+      
+      console.log("Saving bank details...");
+      
       // Check if bank details already exist for this user
       const existingBankDetails = await prisma.bankDetails.findUnique({
         where: { userId: user.id }
@@ -77,10 +82,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch updated user with bank details
+    // Fetch updated user with bank details to ensure we have latest data
     const updatedUser = await prisma.user.findUnique({
-      where: { walletAddress },
+      where: { walletAddress: walletAddress.toLowerCase() },
       include: { bankDetails: true }
+    });
+
+    console.log("Final user state:", {
+      id: updatedUser?.id,
+      profileCompleted: updatedUser?.profileCompleted,
+      hasUpiId: !!updatedUser?.upiId,
+      hasBankDetails: !!updatedUser?.bankDetails
     });
 
     return NextResponse.json({
@@ -91,7 +103,7 @@ export async function POST(request: NextRequest) {
         walletAddress: updatedUser?.walletAddress,
         role: updatedUser?.role,
         upiId: updatedUser?.upiId,
-        profileCompleted: updatedUser?.profileCompleted,
+        profileCompleted: updatedUser?.profileCompleted, // Use actual DB value
         hasBankDetails: !!updatedUser?.bankDetails,
       }
     });

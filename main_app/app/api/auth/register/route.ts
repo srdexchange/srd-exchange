@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +18,8 @@ export async function POST(request: NextRequest) {
     const existingUser = await prisma.user.findUnique({
       where: {
         walletAddress: walletAddress.toLowerCase()
-      }
+      },
+      include: { bankDetails: true }
     })
 
     if (existingUser) {
@@ -26,12 +29,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create new user
+    // Create new user with profileCompleted set to false
     const user = await prisma.user.create({
       data: {
         walletAddress: walletAddress.toLowerCase(),
-        role: role === 'ADMIN' ? 'ADMIN' : 'USER'
-      }
+        role: role === 'ADMIN' ? 'ADMIN' : 'USER',
+        profileCompleted: false, // Explicitly set to false for new users
+        lastLoginAt: new Date(),
+      },
+      include: { bankDetails: true }
     })
 
     return NextResponse.json({
@@ -40,6 +46,9 @@ export async function POST(request: NextRequest) {
         id: user.id,
         walletAddress: user.walletAddress,
         role: user.role,
+        upiId: user.upiId,
+        profileCompleted: false, // New users always need to complete profile
+        hasBankDetails: false,
         createdAt: user.createdAt
       }
     })
@@ -49,5 +58,7 @@ export async function POST(request: NextRequest) {
       { error: 'Registration failed' },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 }

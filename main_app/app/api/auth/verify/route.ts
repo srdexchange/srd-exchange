@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,11 +24,25 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
+      console.log("User not found for address:", walletAddress);
       return NextResponse.json({
         isValid: false,
         error: 'User not found'
       })
     }
+
+    // Profile completion logic: User must have UPI ID
+    const hasUpiId = user.upiId && user.upiId.trim() !== '';
+    
+    // Use the database profileCompleted field AND verify UPI ID exists
+    const isProfileComplete = user.profileCompleted && hasUpiId;
+
+    console.log("User verification:", {
+      walletAddress: user.walletAddress,
+      hasUpiId,
+      profileCompletedInDB: user.profileCompleted,
+      isProfileComplete
+    });
 
     return NextResponse.json({
       isValid: true,
@@ -34,6 +50,8 @@ export async function POST(request: NextRequest) {
         id: user.id,
         walletAddress: user.walletAddress,
         role: user.role,
+        upiId: user.upiId,
+        profileCompleted: isProfileComplete,
         hasBankDetails: !!user.bankDetails,
         createdAt: user.createdAt
       }
@@ -44,5 +62,7 @@ export async function POST(request: NextRequest) {
       { error: 'Verification failed' },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 }

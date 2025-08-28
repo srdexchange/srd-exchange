@@ -1,43 +1,44 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
-    const { walletAddress, walletData, action } = await request.json()
+    const { walletAddress, walletData, action } = await request.json();
 
     if (!walletAddress) {
       return NextResponse.json(
-        { error: 'Wallet address is required' },
+        { error: "Wallet address is required" },
         { status: 400 }
-      )
+      );
     }
 
-    const normalizedAddress = walletAddress.toLowerCase()
-    console.log(`Wallet auth request - Action: ${action}, Address: ${normalizedAddress}`)
+    const normalizedAddress = walletAddress.toLowerCase();
 
-    if (action === 'login') {
+    if (action === "login") {
       // Check if user exists
       const user = await prisma.user.findUnique({
         where: { walletAddress: normalizedAddress },
         include: { bankDetails: true }
-      })
-
-      console.log(`Login attempt - User found:`, user ? { id: user.id, role: user.role, profileCompleted: user.profileCompleted } : 'No user found')
+      });
 
       if (!user) {
         return NextResponse.json({
-          exists: false,
-          requiresRegistration: true
-        })
+          requiresRegistration: true,
+          message: "User not found. Registration required."
+        });
       }
 
-      // Update last login time
+      // Check if profile is complete (has UPI ID)
+      const hasUpiId = user.upiId && user.upiId.trim() !== '';
+      const isProfileComplete = user.profileCompleted && hasUpiId;
+
+      // Update last login
       await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          lastLoginAt: new Date()
-        }
-      })
+        where: { walletAddress: normalizedAddress },
+        data: { lastLoginAt: new Date() }
+      });
 
       return NextResponse.json({
         exists: true,
@@ -45,120 +46,61 @@ export async function POST(request: NextRequest) {
           id: user.id,
           walletAddress: user.walletAddress,
           role: user.role,
-          profileCompleted: user.profileCompleted || false,
           upiId: user.upiId,
+          profileCompleted: isProfileComplete,
           hasBankDetails: !!user.bankDetails,
-          createdAt: user.createdAt,
-          lastLoginAt: new Date()
         }
-      })
+      });
     }
 
-    if (action === 'register') {
+    if (action === "register") {
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
         where: { walletAddress: normalizedAddress }
-      })
-
-      // Determine role based on wallet address
-      const role = determineUserRole(normalizedAddress)
-      console.log(`Registration - Determined role for ${normalizedAddress}: ${role}`)
+      });
 
       if (existingUser) {
-        console.log(`Registration attempt - User already exists:`, { id: existingUser.id, role: existingUser.role })
-        
-        // If user exists but role needs to be updated (e.g., user becoming admin)
-        if (existingUser.role !== role) {
-          console.log(`Updating user role from ${existingUser.role} to ${role}`)
-          
-          const updatedUser = await prisma.user.update({
-            where: { walletAddress: normalizedAddress },
-            data: {
-              role,
-              profileCompleted: role === 'ADMIN' ? true : existingUser.profileCompleted,
-              lastLoginAt: new Date()
-            }
-          })
-
-          return NextResponse.json({
-            success: true,
-            user: {
-              id: updatedUser.id,
-              walletAddress: updatedUser.walletAddress,
-              role: updatedUser.role,
-              profileCompleted: updatedUser.profileCompleted,
-              createdAt: updatedUser.createdAt,
-              isUpdatedUser: true
-            }
-          })
-        }
-
-        // User exists with same role
-        return NextResponse.json({
-          success: true,
-          user: {
-            id: existingUser.id,
-            walletAddress: existingUser.walletAddress,
-            role: existingUser.role,
-            profileCompleted: existingUser.profileCompleted,
-            createdAt: existingUser.createdAt,
-            isExistingUser: true
-          }
-        })
+        return NextResponse.json(
+          { error: "User already exists" },
+          { status: 400 }
+        );
       }
 
-      // Create new user
-      const user = await prisma.user.create({
+      // Create new user - profile is NOT complete yet (needs UPI ID)
+      const newUser = await prisma.user.create({
         data: {
           walletAddress: normalizedAddress,
-          role,
-          profileCompleted: role === 'ADMIN' ? true : false, // Admins don't need profile completion
-          lastLoginAt: new Date()
-        }
-      })
-
-      console.log('New user registered:', {
-        id: user.id,
-        address: user.walletAddress,
-        role: user.role,
-        profileCompleted: user.profileCompleted
-      })
+          profileCompleted: false, // Will be set to true when UPI ID is added
+          lastLoginAt: new Date(),
+        },
+        include: { bankDetails: true }
+      });
 
       return NextResponse.json({
         success: true,
         user: {
-          id: user.id,
-          walletAddress: user.walletAddress,
-          role: user.role,
-          profileCompleted: user.profileCompleted,
-          createdAt: user.createdAt,
-          isNewUser: true
+          id: newUser.id,
+          walletAddress: newUser.walletAddress,
+          role: newUser.role,
+          upiId: newUser.upiId,
+          profileCompleted: false, // New users need to complete profile
+          hasBankDetails: false,
         }
-      })
+      });
     }
 
     return NextResponse.json(
-      { error: 'Invalid action' },
+      { error: "Invalid action" },
       { status: 400 }
-    )
+    );
+
   } catch (error) {
-    console.error('Wallet auth error:', error)
+    console.error("Wallet auth error:", error);
     return NextResponse.json(
-      { error: 'Authentication failed' },
+      { error: "Authentication failed" },
       { status: 500 }
-    )
+    );
+  } finally {
+    await prisma.$disconnect();
   }
-}
-
-function determineUserRole(walletAddress: string): 'USER' | 'ADMIN' {
-  const adminWallets = [
-   '0xC16e1A366Cc174af12F8f343B9Aed84eB26298fF',
-    '0x34d7cd03fb8252ab38b0102373150cc4cfd337b9',
-  ]
-
-  console.log(`Checking if ${walletAddress} is in admin wallets:`, adminWallets)
-  const isAdmin = adminWallets.includes(walletAddress.toLowerCase())
-  console.log(`Result: ${isAdmin ? 'ADMIN' : 'USER'}`)
-  
-  return isAdmin ? 'ADMIN' : 'USER'
 }

@@ -3,10 +3,13 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useModal } from "@/contexts/ModalContext";
+import { useAccount, useDisconnect } from "wagmi";
 
 export default function LandingPage() {
   const [isMobile, setIsMobile] = useState(false);
   const { openWalletModal } = useModal();
+  const { isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -18,6 +21,46 @@ export default function LandingPage() {
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Clear any persistent state when landing page loads
+  useEffect(() => {
+    // If user is connected but on landing page, they might want to use a different account
+    // So we should clear the modal state to ensure fresh experience
+    if (typeof window !== 'undefined') {
+      // Clear any modal state or cached data that might interfere
+      sessionStorage.removeItem('modal-state');
+      sessionStorage.removeItem('wallet-modal-state');
+    }
+  }, []);
+
+  const handleTradeNow = () => {
+    // If user is already connected, disconnect first to allow fresh login
+    if (isConnected) {
+      disconnect();
+      
+      // Clear storage and wait a bit before opening modal
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user-session');
+        sessionStorage.clear();
+        
+        const keysToRemove = Object.keys(localStorage).filter(key => 
+          key.includes('wagmi') || 
+          key.includes('wallet') || 
+          key.includes('user') ||
+          key.includes('auth')
+        );
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      }
+      
+      // Wait a moment then open wallet modal for fresh connection
+      setTimeout(() => {
+        openWalletModal();
+      }, 500);
+    } else {
+      // User not connected, open modal normally
+      openWalletModal();
+    }
+  };
 
   const iconVariants = {
     hidden: { opacity: 0, scale: 0 },
@@ -256,7 +299,7 @@ export default function LandingPage() {
 
         {/* Updated Trade Now Button */}
         <motion.button
-          onClick={openWalletModal}
+          onClick={handleTradeNow}
           className="bg-[#622DBF] text-white md:text-xl text-lg font-semibold md:px-12 md:py-4 px-6 py-2 rounded-sm transition-all duration-200 flex items-center space-x-3 shadow-xl hover:shadow-purple-500/25 transform hover:scale-105"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
