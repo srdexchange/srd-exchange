@@ -21,7 +21,7 @@ export default function AdminSignupPage() {
     setError(null)
 
     try {
-      // First register the wallet using wallet-auth
+      // Use wallet-auth route which now checks admin privileges automatically
       const registerRes = await fetch('/api/auth/wallet-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

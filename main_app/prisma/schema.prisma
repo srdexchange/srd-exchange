@@ -58,7 +58,7 @@ model Order {
   @@map("orders")
 }
 
-// New model for storing current rates
+
 model Rate {
   id          String      @id @default(cuid())
   type        RateType    

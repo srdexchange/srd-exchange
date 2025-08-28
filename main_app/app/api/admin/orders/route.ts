@@ -1,87 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
 
-// GET - Fetch all orders for admin dashboard
+const prisma = new PrismaClient()
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const status = searchParams.get('status') || 'all'
-    const type = searchParams.get('type') || 'all'
+    const status = searchParams.get('status') // 'pending', 'completed', 'rejected'
+    
+    let whereClause: any = {}
+    
+    switch (status) {
+      case 'pending':
+        whereClause = {
+          status: {
+            in: ['PENDING', 'ADMIN_APPROVED', 'PAYMENT_SUBMITTED']
+          }
+        }
+        break
+      case 'completed':
+        whereClause = { status: 'COMPLETED' }
+        break
+      case 'rejected':
+        whereClause = { status: 'CANCELLED' }
+        break
+      default:
+        // If no status specified, return all orders
+        break
+    }
 
-    // TODO: Replace with actual database query
-    const mockOrders = [
-      {
-        id: '1',
-        userId: 'user123',
-        userEmail: 'user@example.com',
-        type: 'buy',
-        amount: 1000,
-        price: 83.50,
-        usdtAmount: 11.98,
-        status: 'completed',
-        paymentMethod: 'UPI',
-        createdAt: new Date().toISOString(),
-        completedAt: new Date().toISOString()
+    const orders = await prisma.order.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            walletAddress: true,
+            upiId: true,
+            bankDetails: true
+          }
+        }
       },
-      {
-        id: '2',
-        userId: 'user456',
-        userEmail: 'trader@example.com',
-        type: 'sell',
-        amount: 2500,
-        price: 83.45,
-        usdtAmount: 29.96,
-        status: 'pending',
-        paymentMethod: 'Bank Transfer',
-        createdAt: new Date().toISOString(),
-        completedAt: null
+      orderBy: {
+        createdAt: 'desc'
       }
-    ]
+    })
 
-    // Filter by status if specified
-    let filteredOrders = mockOrders
-    if (status !== 'all') {
-      filteredOrders = mockOrders.filter(order => order.status === status)
-    }
-    if (type !== 'all') {
-      filteredOrders = filteredOrders.filter(order => order.type === type)
-    }
-
-    // Pagination
-    const startIndex = (page - 1) * limit
-    const endIndex = startIndex + limit
-    const paginatedOrders = filteredOrders.slice(startIndex, endIndex)
+    // Transform orders to match frontend expected format
+    const transformedOrders = orders.map(order => ({
+      id: `#${order.id.slice(-6)}`, // Show last 6 characters of order ID
+      fullId: order.id,
+      blockchainOrderId: order.blockchainOrderId,
+      time: formatTime(order.createdAt),
+      amount: Number(order.amount),
+      type: getOrderTypeLabel(order.orderType),
+      orderType: order.orderType,
+      price: Number(order.buyRate || order.sellRate || 0),
+      currency: order.orderType === 'BUY_CDM' ? 'CDM' : 'UPI',
+      status: order.status,
+      paymentProof: order.paymentProof,
+      adminUpiId: order.adminUpiId,
+      adminBankDetails: order.adminBankDetails,
+      adminNotes: order.adminNotes,
+      user: {
+        id: order.user.id,
+        walletAddress: order.user.walletAddress,
+        upiId: order.user.upiId,
+        bankDetails: order.user.bankDetails
+      },
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt
+    }))
 
     return NextResponse.json({
       success: true,
-      data: {
-        orders: paginatedOrders,
-        pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(filteredOrders.length / limit),
-          totalOrders: filteredOrders.length,
-          hasNext: endIndex < filteredOrders.length,
-          hasPrev: page > 1
-        },
-        summary: {
-          totalVolume: filteredOrders.reduce((sum, order) => sum + order.amount, 0),
-          totalUSDT: filteredOrders.reduce((sum, order) => sum + order.usdtAmount, 0),
-          completedOrders: filteredOrders.filter(order => order.status === 'completed').length,
-          pendingOrders: filteredOrders.filter(order => order.status === 'pending').length
-        }
-      }
+      orders: transformedOrders
     })
+
   } catch (error) {
-    console.error('Admin orders fetch error:', error)
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch orders'
-    }, { status: 500 })
+    console.error('Error fetching orders:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch orders' },
+      { status: 500 }
+    )
+  } finally {
+    await prisma.$disconnect()
   }
 }
 
-// PUT - Update order status (admin only)
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
@@ -126,7 +132,6 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE - Cancel/delete order (admin only)
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -152,5 +157,44 @@ export async function DELETE(request: NextRequest) {
       success: false,
       error: 'Failed to cancel order'
     }, { status: 500 })
+  }
+}
+
+function formatTime(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const orderDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  
+  const timeString = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+
+  if (orderDate.getTime() === today.getTime()) {
+    return `Today ${timeString}`
+  } else if (orderDate.getTime() === today.getTime() - 24 * 60 * 60 * 1000) {
+    return `Yesterday ${timeString}`
+  } else {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+}
+
+function getOrderTypeLabel(orderType: string): string {
+  switch (orderType) {
+    case 'BUY_UPI':
+      return 'Buy Order'
+    case 'BUY_CDM':
+      return 'Buy Order'
+    case 'SELL':
+      return 'Sell Order'
+    default:
+      return orderType
   }
 }

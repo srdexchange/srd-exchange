@@ -1,59 +1,136 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import CancelOrderModal from "./modal/cancelOrder";
+
+interface Order {
+  id: string;
+  fullId: string;
+  time: string;
+  amount: number;
+  type: string;
+  orderType: string;
+  price: number;
+  currency: string;
+  status: string;
+  user: {
+    id: string;
+    walletAddress: string;
+    upiId: string | null;
+    bankDetails: any;
+  };
+}
 
 export default function AdminLeftSide() {
   const [activeFilter, setActiveFilter] = useState("Pending");
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [selectedOrderIndex, setSelectedOrderIndex] = useState<number | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const orders = [
-    {
-      id: "#24234",
-      time: "Today 11:40 PM",
-      amount: 1000,
-      type: "Buy Order",
-      price: 1.5,
-      currency: "UPI",
-    },
-    {
-      id: "#24234",
-      time: "Today 11:40 PM",
-      amount: 1000,
-      type: "Buy Order",
-      price: 1.5,
-      currency: "CDM",
-    },
-    {
-      id: "#24234",
-      time: "Today 11:40 PM",
-      amount: 1000,
-      type: "Sell Order",
-      price: 1.5,
-      currency: "UPI",
-    },
-  ];
+  // Fetch orders based on active filter
+  useEffect(() => {
+    fetchOrders();
+  }, [activeFilter]);
 
-  const handleReject = (orderIndex: number) => {
-    setSelectedOrderIndex(orderIndex);
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const statusParam = activeFilter.toLowerCase();
+      const response = await fetch(`/api/admin/orders?status=${statusParam}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setOrders(data.orders);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccept = async (order: Order) => {
+    try {
+      const response = await fetch(`/api/admin/orders/${order.fullId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'ADMIN_APPROVED'
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh orders
+        fetchOrders();
+      }
+    } catch (error) {
+      console.error('Error accepting order:', error);
+    }
+  };
+
+  const handleReject = (order: Order) => {
+    setSelectedOrder(order);
     setShowCancelModal(true);
   };
 
-  const handleConfirmCancel = () => {
-    if (selectedOrderIndex !== null) {
-      // Handle order cancellation logic here
-      console.log(`Order ${orders[selectedOrderIndex].id} has been cancelled`);
+  const handleConfirmCancel = async (reason: string) => {
+    if (selectedOrder) {
+      try {
+        const response = await fetch(`/api/admin/orders/${selectedOrder.fullId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'CANCELLED',
+            adminNotes: reason
+          }),
+        });
+
+        if (response.ok) {
+          // Refresh orders
+          fetchOrders();
+        }
+      } catch (error) {
+        console.error('Error rejecting order:', error);
+      }
     }
     setShowCancelModal(false);
-    setSelectedOrderIndex(null);
+    setSelectedOrder(null);
   };
 
   const handleCloseCancelModal = () => {
     setShowCancelModal(false);
-    setSelectedOrderIndex(null);
+    setSelectedOrder(null);
+  };
+
+  // Filter orders based on search term
+  const filteredOrders = orders.filter(order =>
+    order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.user.walletAddress.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'bg-yellow-500';
+      case 'ADMIN_APPROVED':
+        return 'bg-blue-500';
+      case 'PAYMENT_SUBMITTED':
+        return 'bg-purple-500';
+      case 'COMPLETED':
+        return 'bg-green-500';
+      case 'CANCELLED':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
   };
 
   return (
@@ -71,7 +148,9 @@ export default function AdminLeftSide() {
         </div>
         <input
           type="text"
-          placeholder="Search..."
+          placeholder="Search by Order ID or Wallet..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
           className="w-[95%] bg-[#111010] rounded-md py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-[#622DBF] focus:ring-1 focus:ring-purple-500/20"
         />
       </div>
@@ -115,87 +194,109 @@ export default function AdminLeftSide() {
 
       {/* Orders List */}
       <div className="space-y-4">
-        {orders.map((order, index) => (
-          <div
-            key={index}
-            className="bg-[#1D1C1C] rounded-md py-2 px-2"
-          >
-            {/* Order Header */}
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <span className="text-white text-md">{order.id}</span>
-                <div className="text-white text-xs">{order.time}</div>
-              </div>
-              <div className="flex items-center space-x-1">
-                {order.currency === "UPI" ? (
-                  <Image 
-                    src="/phonepay-gpay.svg" 
-                    alt="UPI" 
-                    width={20} 
-                    height={12}
-                    className="flex-shrink-0"
-                  />
-                ) : (
-                  <Image 
-                    src="/bank.svg" 
-                    alt="CDM" 
-                    width={16} 
-                    height={16}
-                    className="flex-shrink-0"
-                  />
-                )}
-                <span className="text-white text-sm">{order.currency}</span>
-              </div>
-            </div>
-
-            {/* Order Details */}
-            <div className="flex items-center justify-center mb-3">
-              <div className="flex items-center space-x-2 border border-[#464646] py-0.5 px-0.5 rounded">
-                <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
-                  <span>{order.amount}</span>
-                  <span className="text-yellow-500">₹</span>
-                </span>
-                <div className="flex items-center space-x-1">
-                  {order.type.includes("Buy") ? (
-                    <Image 
-                      src="/buy.svg" 
-                      alt="Buy" 
-                      width={14} 
-                      height={14}
-                      className="flex-shrink-0"
-                    />
-                  ) : (
-                    <Image 
-                      src="/sell.svg" 
-                      alt="Sell" 
-                      width={14} 
-                      height={14}
-                      className="flex-shrink-0"
-                    />
-                  )}
-                  <span className="text-gray-400 text-sm">{order.type}</span>
-                </div>
-                <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
-                  <span>{order.price}</span>
-                  <span className="text-purple-500">$</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3 justify-end">
-              <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all">
-                Accept
-              </button>
-              <button 
-                onClick={() => handleReject(index)}
-                className="bg-yellow-600 hover:bg-red-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
-              >
-                Reject
-              </button>
-            </div>
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
+            <p className="text-gray-400 mt-2">Loading orders...</p>
           </div>
-        ))}
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No orders found</p>
+          </div>
+        ) : (
+          filteredOrders.map((order, index) => (
+            <div
+              key={order.fullId}
+              className="bg-[#1D1C1C] rounded-md py-2 px-2"
+            >
+              {/* Order Header */}
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <span className="text-white text-md">{order.id}</span>
+                  <div className="text-white text-xs">{order.time}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {order.user.walletAddress.slice(0, 6)}...{order.user.walletAddress.slice(-4)}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end space-y-1">
+                  <div className="flex items-center space-x-1">
+                    {order.currency === "UPI" ? (
+                      <Image 
+                        src="/phonepay-gpay.svg" 
+                        alt="UPI" 
+                        width={20} 
+                        height={12}
+                        className="flex-shrink-0"
+                      />
+                    ) : (
+                      <Image 
+                        src="/bank.svg" 
+                        alt="CDM" 
+                        width={16} 
+                        height={16}
+                        className="flex-shrink-0"
+                      />
+                    )}
+                    <span className="text-white text-sm">{order.currency}</span>
+                  </div>
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(order.status)}`}></div>
+                </div>
+              </div>
+
+              {/* Order Details */}
+              <div className="flex items-center justify-center mb-3">
+                <div className="flex items-center space-x-2 border border-[#464646] py-0.5 px-0.5 rounded">
+                  <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                    <span>{order.amount}</span>
+                    <span className="text-yellow-500">₹</span>
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    {order.type.includes("Buy") ? (
+                      <Image 
+                        src="/buy.svg" 
+                        alt="Buy" 
+                        width={14} 
+                        height={14}
+                        className="flex-shrink-0"
+                      />
+                    ) : (
+                      <Image 
+                        src="/sell.svg" 
+                        alt="Sell" 
+                        width={14} 
+                        height={14}
+                        className="flex-shrink-0"
+                      />
+                    )}
+                    <span className="text-gray-400 text-sm">{order.type}</span>
+                  </div>
+                  <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                    <span>{order.price}</span>
+                    <span className="text-purple-500">$</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons - Only show for pending orders */}
+              {activeFilter === "Pending" && order.status === "PENDING" && (
+                <div className="flex space-x-3 justify-end">
+                  <button 
+                    onClick={() => handleAccept(order)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
+                  >
+                    Accept
+                  </button>
+                  <button 
+                    onClick={() => handleReject(order)}
+                    className="bg-yellow-600 hover:bg-red-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
       </div>
 
       {/* Cancel Order Modal */}
