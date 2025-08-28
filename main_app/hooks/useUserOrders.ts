@@ -1,81 +1,58 @@
-import { useState, useEffect } from 'react'
-import { useAccount } from 'wagmi'
+import { useState, useEffect } from 'react';
+import { useAccount } from 'wagmi';
 
 interface Order {
-  id: string
-  blockchainOrderId?: number
-  amount: string
-  orderType: 'BUY_UPI' | 'BUY_CDM' | 'SELL'
-  status: 'PENDING' | 'ADMIN_APPROVED' | 'PAYMENT_SUBMITTED' | 'COMPLETED' | 'CANCELLED'
-  paymentProof?: string
-  adminUpiId?: string
-  adminBankDetails?: string
-  adminNotes?: string
-  createdAt: string
-  updatedAt: string
+  id: string;
+  fullId: string;
+  time: string;
+  amount: number;
+  type: string;
+  orderType: string;
+  price: number;
+  currency: string;
+  status: string;
+  user: {
+    id: string;
+    walletAddress: string;
+    upiId: string | null;
+    bankDetails: any;
+  };
+  createdAt: string;
 }
 
-interface UseUserOrdersReturn {
-  orders: Order[]
-  ongoingOrders: Order[]
-  completedOrders: Order[]
-  isLoading: boolean
-  error: string | null
-  refetch: () => Promise<void>
-}
-
-export function useUserOrders(): UseUserOrdersReturn {
-  const { address, isConnected } = useAccount()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export const useUserOrders = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { address, isConnected } = useAccount();
 
   const fetchOrders = async () => {
-    if (!address || !isConnected) return
-
-    setIsLoading(true)
-    setError(null)
-    
-    try {
-      const response = await fetch(`/api/orders?walletAddress=${address}`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch orders')
-      }
-      
-      const data = await response.json()
-      setOrders(data.orders || [])
-    } catch (err) {
-      console.error('Error fetching orders:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch orders')
-    } finally {
-      setIsLoading(false)
+    if (!isConnected || !address) {
+      setOrders([]);
+      setIsLoading(false);
+      return;
     }
-  }
+
+    try {
+      const response = await fetch(`/api/user/orders?walletAddress=${address}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setOrders(data.orders);
+      }
+    } catch (error) {
+      console.error('Error fetching user orders:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (isConnected && address) {
-      fetchOrders()
-    } else {
-      setOrders([])
-    }
-  }, [isConnected, address])
-
-  // Separate ongoing and completed orders
-  const ongoingOrders = orders.filter(order => 
-    ['PENDING', 'ADMIN_APPROVED', 'PAYMENT_SUBMITTED'].includes(order.status)
-  )
-  
-  const completedOrders = orders.filter(order => 
-    ['COMPLETED', 'CANCELLED'].includes(order.status)
-  )
+    fetchOrders();
+  }, [address, isConnected]);
 
   return {
     orders,
-    ongoingOrders,
-    completedOrders,
     isLoading,
-    error,
     refetch: fetchOrders
-  }
-}
+  };
+};

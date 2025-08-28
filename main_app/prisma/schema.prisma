@@ -40,8 +40,8 @@ model BankDetails {
 
 model Order {
   id                String      @id @default(cuid())
-  blockchainOrderId Int?        // Smart contract order ID
   userId            String
+  blockchainOrderId String?     // For blockchain order tracking
   user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount            Decimal
   orderType         OrderType

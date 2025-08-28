@@ -20,6 +20,7 @@ export default function BuySellSection() {
   const [showSellUPIModal, setShowSellUPIModal] = useState(false)
   const [showSellCDMModal, setShowSellCDMModal] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
   // Wallet and orders data
   const { 
@@ -92,15 +93,87 @@ export default function BuySellSection() {
     setAmount('')
   }
 
-  const handleBuySellClick = () => {
-    if (activeTab === 'buy' && paymentMethod === 'cdm') {
-      setShowBuyCDMModal(true)
-    } else if (activeTab === 'buy' && paymentMethod === 'upi') {
-      setShowBuyUPIModal(true)
-    } else if (activeTab === 'sell' && paymentMethod === 'upi') {
-      setShowSellUPIModal(true)
-    } else if (activeTab === 'sell' && paymentMethod === 'cdm') {
-      setShowSellCDMModal(true)
+  // Create order function
+  const createOrder = async (orderType: string, orderAmount: string, rate: number) => {
+    if (!address) return null
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          orderType: orderType,
+          amount: orderAmount,
+          usdtAmount: orderType.includes('BUY') ? usdtAmount : amount,
+          buyRate: orderType.includes('BUY') ? rate : null,
+          sellRate: orderType.includes('SELL') ? rate : null,
+          paymentMethod: paymentMethod.toUpperCase()
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // Refresh orders after successful creation
+        await refetchOrders()
+        return data.order
+      } else {
+        throw new Error(data.error || 'Failed to create order')
+      }
+    } catch (error) {
+      console.error('Error creating order:', error)
+      alert('Failed to create order. Please try again.')
+      return null
+    }
+  }
+
+  const handleBuySellClick = async () => {
+    if (!isConnected || !amount || parseFloat(amount) <= 0) return
+
+    setIsPlacingOrder(true)
+
+    try {
+      let orderType = ''
+      let orderAmount = amount
+      let rate = 0
+
+      if (activeTab === 'buy') {
+        orderType = paymentMethod === 'cdm' ? 'BUY_CDM' : 'BUY_UPI'
+        rate = buyPrice
+      } else {
+        orderType = 'SELL'
+        rate = sellPrice
+      }
+
+      const order = await createOrder(orderType, orderAmount, rate)
+
+      if (order) {
+        // Refresh orders after successful creation
+        await refetchOrders()
+        
+        // Reset form
+        setAmount('')
+        
+        console.log('Order created successfully:', order)
+        
+        // Show appropriate modal with the created order
+        if (activeTab === 'buy' && paymentMethod === 'cdm') {
+          setShowBuyCDMModal(true)
+        } else if (activeTab === 'buy' && paymentMethod === 'upi') {
+          setShowBuyUPIModal(true)
+        } else if (activeTab === 'sell' && paymentMethod === 'upi') {
+          setShowSellUPIModal(true)
+        } else if (activeTab === 'sell' && paymentMethod === 'cdm') {
+          setShowSellCDMModal(true)
+        }
+      }
+    } catch (error) {
+      console.error('Error in buy/sell click:', error)
+    } finally {
+      setIsPlacingOrder(false)
     }
   }
 
@@ -265,7 +338,6 @@ export default function BuySellSection() {
             </div>
           </motion.div>
 
-          {/* Rest of your existing components... */}
           {/* Buy/Sell Tabs */}
           <motion.div 
             className="flex space-x-3 sm:space-x-6 max-w-lg mx-auto mb-6 sm:mb-8"
@@ -298,7 +370,6 @@ export default function BuySellSection() {
             </motion.button>
           </motion.div>
 
-          {/* Continue with rest of existing components... */}
           {/* Payment Method Selection */}
           <AnimatePresence>
             {activeTab && (
@@ -390,7 +461,6 @@ export default function BuySellSection() {
             )}
           </AnimatePresence>
 
-          {/* Continue with amount input and rest of components... */}
           {/* Amount Input Section */}
           <AnimatePresence>
             {activeTab && paymentMethod && (
@@ -462,17 +532,19 @@ export default function BuySellSection() {
             {activeTab && paymentMethod && (
               <motion.button 
                 onClick={handleBuySellClick}
-                disabled={!isConnected}
+                disabled={!isConnected || isPlacingOrder || !amount || parseFloat(amount) <= 0}
                 className="w-full bg-[#622DBF] hover:bg-purple-700 text-white py-4 sm:py-5 px-6 rounded-xl font-bold text-lg sm:text-xl transition-all shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 disabled:opacity-50 disabled:cursor-not-allowed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                whileHover={{ scale: isConnected ? 1.02 : 1 }}
-                whileTap={{ scale: isConnected ? 0.98 : 1 }}
+                whileHover={{ scale: (!isConnected || isPlacingOrder) ? 1 : 1.02 }}
+                whileTap={{ scale: (!isConnected || isPlacingOrder) ? 1 : 0.98 }}
                 transition={{ duration: 0.3 }}
               >
                 {!isConnected 
                   ? 'Connect Wallet to Trade'
+                  : isPlacingOrder
+                  ? `Placing ${activeTab === 'buy' ? 'Buy' : 'Sell'} Order...`
                   : `${activeTab === 'buy' ? 'Buy' : 'Sell'}`
                 }
               </motion.button>

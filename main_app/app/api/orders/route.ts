@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 // GET - Fetch user's orders
 export async function GET(request: NextRequest) {
@@ -47,9 +49,18 @@ export async function GET(request: NextRequest) {
 // POST - Create new order
 export async function POST(request: NextRequest) {
   try {
-    const { walletAddress, amount, orderType, paymentProof, adminNotes } = await request.json()
+    const { 
+      walletAddress, 
+      orderType, 
+      amount, 
+      usdtAmount, 
+      buyRate, 
+      sellRate,
+      paymentMethod 
+    } = await request.json()
 
-    if (!walletAddress || !amount || !orderType) {
+    // Validate required fields
+    if (!walletAddress || !orderType || !amount) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -68,28 +79,56 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create new order
+    // Create order
     const order = await prisma.order.create({
       data: {
         userId: user.id,
-        amount: amount.toString(),
-        orderType,
-        status: 'PENDING',
-        paymentProof,
-        adminNotes
+        orderType: orderType, // 'BUY_UPI', 'BUY_CDM', 'SELL'
+        amount: parseFloat(amount),
+        buyRate: buyRate ? parseFloat(buyRate) : null,
+        sellRate: sellRate ? parseFloat(sellRate) : null,
+        status: 'PENDING'
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            walletAddress: true,
+            upiId: true,
+            bankDetails: true
+          }
+        }
       }
     })
 
+    // Transform for frontend
+    const transformedOrder = {
+      id: `#${order.id.slice(-6)}`,
+      fullId: order.id,
+      time: formatTime(order.createdAt),
+      amount: Number(order.amount),
+      type: getOrderTypeLabel(order.orderType),
+      orderType: order.orderType,
+      price: Number(order.buyRate || order.sellRate || 0),
+      currency: order.orderType === 'BUY_CDM' ? 'CDM' : 'UPI',
+      status: order.status,
+      user: order.user,
+      createdAt: order.createdAt
+    }
+
     return NextResponse.json({
       success: true,
-      order
+      order: transformedOrder
     })
+
   } catch (error) {
     console.error('Error creating order:', error)
     return NextResponse.json(
       { error: 'Failed to create order' },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 }
 
@@ -128,5 +167,43 @@ export async function PUT(request: NextRequest) {
       success: false,
       error: 'Failed to update order'
     }, { status: 500 })
+  }
+}
+
+function formatTime(date: Date): string {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const orderDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  
+  const timeString = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+
+  if (orderDate.getTime() === today.getTime()) {
+    return `Today ${timeString}`
+  } else if (orderDate.getTime() === today.getTime() - 24 * 60 * 60 * 1000) {
+    return `Yesterday ${timeString}`
+  } else {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+}
+
+function getOrderTypeLabel(orderType: string): string {
+  switch (orderType) {
+    case 'BUY_UPI':
+    case 'BUY_CDM':
+      return 'Buy Order'
+    case 'SELL':
+      return 'Sell Order'
+    default:
+      return orderType
   }
 }

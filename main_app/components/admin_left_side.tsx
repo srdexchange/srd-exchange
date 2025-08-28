@@ -3,6 +3,8 @@
 import { Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useAccount } from 'wagmi';
+import { useAdminAPI } from '@/hooks/useAdminAPI';
 import CancelOrderModal from "./modal/cancelOrder";
 
 interface Order {
@@ -30,24 +32,42 @@ export default function AdminLeftSide() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const { address } = useAccount();
+  const { makeAdminRequest } = useAdminAPI();
 
   // Fetch orders based on active filter
   useEffect(() => {
     fetchOrders();
-  }, [activeFilter]);
+  }, [activeFilter, address]);
 
   const fetchOrders = async () => {
+    if (!address) {
+      console.log('No wallet address available');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+    
     try {
       const statusParam = activeFilter.toLowerCase();
-      const response = await fetch(`/api/admin/orders?status=${statusParam}`);
-      const data = await response.json();
+      console.log('Fetching orders with status:', statusParam);
+      
+      const data = await makeAdminRequest(`/api/admin/orders?status=${statusParam}`);
       
       if (data.success) {
+        console.log('Orders found:', data.orders.length);
         setOrders(data.orders);
+      } else {
+        console.error('API returned error:', data.error);
+        setError(data.error);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch orders');
     } finally {
       setLoading(false);
     }
@@ -55,19 +75,25 @@ export default function AdminLeftSide() {
 
   const handleAccept = async (order: Order) => {
     try {
-      const response = await fetch(`/api/admin/orders/${order.fullId}`, {
+      console.log('Accepting order:', order.fullId);
+      const data = await makeAdminRequest(`/api/admin/orders/${order.fullId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           status: 'ADMIN_APPROVED'
-        }),
+        })
       });
 
-      if (response.ok) {
+      if (data.success) {
+        console.log('Order accepted successfully');
         // Refresh orders
         fetchOrders();
+        
+        // Trigger a custom event to notify other components
+        window.dispatchEvent(new CustomEvent('orderAccepted', { 
+          detail: { orderId: order.fullId, order } 
+        }));
+      } else {
+        console.error('Failed to accept order:', data.error);
       }
     } catch (error) {
       console.error('Error accepting order:', error);
@@ -82,20 +108,21 @@ export default function AdminLeftSide() {
   const handleConfirmCancel = async (reason: string) => {
     if (selectedOrder) {
       try {
-        const response = await fetch(`/api/admin/orders/${selectedOrder.fullId}`, {
+        console.log('Rejecting order:', selectedOrder.fullId);
+        const data = await makeAdminRequest(`/api/admin/orders/${selectedOrder.fullId}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
             status: 'CANCELLED',
             adminNotes: reason
-          }),
+          })
         });
 
-        if (response.ok) {
+        if (data.success) {
+          console.log('Order rejected successfully');
           // Refresh orders
           fetchOrders();
+        } else {
+          console.error('Failed to reject order:', data.error);
         }
       } catch (error) {
         console.error('Error rejecting order:', error);
@@ -132,6 +159,16 @@ export default function AdminLeftSide() {
         return 'bg-gray-500';
     }
   };
+
+  // Debug log
+  console.log('Admin Left Side State:', {
+    activeFilter,
+    loading,
+    ordersCount: orders.length,
+    filteredOrdersCount: filteredOrders.length,
+    hasAddress: !!address,
+    error
+  });
 
   return (
     <div className="bg-[#141414] text-white h-full py-4 px-2 overflow-y-auto">
@@ -192,6 +229,22 @@ export default function AdminLeftSide() {
         </button>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-600/20 border border-red-600/50 rounded text-sm text-red-300">
+          <div className="font-medium">Error:</div>
+          <div>{error}</div>
+        </div>
+      )}
+
+      {/* Wallet Connection Status */}
+      {!address && (
+        <div className="mb-4 p-3 bg-yellow-600/20 border border-yellow-600/50 rounded text-sm text-yellow-300">
+          <div className="font-medium">Admin wallet not connected</div>
+          <div>Please connect your admin wallet to view orders</div>
+        </div>
+      )}
+
       {/* Orders List */}
       <div className="space-y-4">
         {loading ? (
@@ -199,9 +252,22 @@ export default function AdminLeftSide() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto"></div>
             <p className="text-gray-400 mt-2">Loading orders...</p>
           </div>
+        ) : !address ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">Connect admin wallet to view orders</p>
+          </div>
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-400">No orders found</p>
+            <p className="text-xs text-gray-500 mt-2">Filter: {activeFilter}</p>
+            {!error && (
+              <button 
+                onClick={fetchOrders}
+                className="mt-3 px-4 py-2 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 transition-colors"
+              >
+                Refresh Orders
+              </button>
+            )}
           </div>
         ) : (
           filteredOrders.map((order, index) => (

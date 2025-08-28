@@ -1,66 +1,56 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react';
 
 interface Rate {
-  id: string
-  type: string
-  currency: 'UPI' | 'CDM'
-  buyRate: number
-  sellRate: number
-  updatedAt: string
+  buyRate: number;
+  sellRate: number;
+  currency: 'UPI' | 'CDM';
 }
 
-export function useRates() {
-  const [rates, setRates] = useState<Rate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export const useRates = () => {
+  const [rates, setRates] = useState<Rate[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const fetchRates = useCallback(async () => {
+  const fetchRates = async () => {
     try {
-      setLoading(true)
-      const response = await fetch('/api/rates')
-      const data = await response.json()
+      const response = await fetch('/api/admin/rates');
+      const data = await response.json();
       
-      if (response.ok) {
-        setRates(data.rates)
-        setError(null)
-      } else {
-        setError(data.error || 'Failed to fetch rates')
+      if (data.success) {
+        setRates(data.rates);
       }
-    } catch (err) {
-      setError('Network error')
-      console.error('Error fetching rates:', err)
+    } catch (error) {
+      console.error('Error fetching rates:', error);
+      // Fallback rates
+      setRates([
+        { buyRate: 84.5, sellRate: 84.0, currency: 'UPI' },
+        { buyRate: 84.3, sellRate: 83.8, currency: 'CDM' }
+      ]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  };
 
   useEffect(() => {
-    fetchRates()
-  }, [fetchRates])
+    fetchRates();
+  }, []);
 
-  const getRateByCurrency = useCallback((currency: 'UPI' | 'CDM') => {
-    return rates.find(rate => rate.currency === currency)
-  }, [rates])
+  const getBuyRate = (currency: 'UPI' | 'CDM') => {
+    const rate = rates.find(r => r.currency === currency);
+    return rate?.buyRate || (currency === 'UPI' ? 84.5 : 84.3);
+  };
 
-  const getBuyRate = useCallback((currency: 'UPI' | 'CDM' = 'UPI') => {
-    const rate = getRateByCurrency(currency)
-    return rate ? rate.buyRate : 85.6 // Default fallback
-  }, [getRateByCurrency])
-
-  const getSellRate = useCallback((currency: 'UPI' | 'CDM' = 'UPI') => {
-    const rate = getRateByCurrency(currency)
-    return rate ? rate.sellRate : 85.6 // Default fallback
-  }, [getRateByCurrency])
+  const getSellRate = (currency: 'UPI' | 'CDM') => {
+    const rate = rates.find(r => r.currency === currency);
+    return rate?.sellRate || (currency === 'UPI' ? 84.0 : 83.8);
+  };
 
   return {
     rates,
     loading,
-    error,
-    refetch: fetchRates,
-    getRateByCurrency,
     getBuyRate,
-    getSellRate
-  }
-}
+    getSellRate,
+    refetch: fetchRates
+  };
+};

@@ -3,10 +3,52 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+// Simple admin verification function
+async function verifyAdminAccess(request: NextRequest) {
+  try {
+    const walletAddress = request.headers.get('x-wallet-address')
+    
+    if (!walletAddress) {
+      return NextResponse.json(
+        { error: 'Wallet address required' },
+        { status: 401 }
+      )
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { walletAddress: walletAddress.toLowerCase() }
+    })
+
+    if (!user || user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Admin access required' },
+        { status: 403 }
+      )
+    }
+
+    return { user }
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Verification failed' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin access first
+    const adminCheck = await verifyAdminAccess(request)
+    if (adminCheck instanceof NextResponse) {
+      return adminCheck // Return error response
+    }
+
+    console.log('Admin orders API called by admin:', adminCheck.user.walletAddress);
+    
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // 'pending', 'completed', 'rejected'
+    
+    console.log('Status filter:', status);
     
     let whereClause: any = {}
     
@@ -29,6 +71,8 @@ export async function GET(request: NextRequest) {
         break
     }
 
+    console.log('Where clause:', whereClause);
+
     const orders = await prisma.order.findMany({
       where: whereClause,
       include: {
@@ -45,6 +89,8 @@ export async function GET(request: NextRequest) {
         createdAt: 'desc'
       }
     })
+
+    console.log('Found orders:', orders.length);
 
     // Transform orders to match frontend expected format
     const transformedOrders = orders.map(order => ({
@@ -72,6 +118,8 @@ export async function GET(request: NextRequest) {
       updatedAt: order.updatedAt
     }))
 
+    console.log('Transformed orders:', transformedOrders.length);
+
     return NextResponse.json({
       success: true,
       orders: transformedOrders
@@ -80,83 +128,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching orders:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch orders' },
+      { error: 'Failed to fetch orders', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   } finally {
     await prisma.$disconnect()
-  }
-}
-
-export async function PUT(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { orderId, status, adminNotes } = body
-
-    if (!orderId || !status) {
-      return NextResponse.json({
-        success: false,
-        error: 'Order ID and status are required'
-      }, { status: 400 })
-    }
-
-    // TODO: Add admin authentication check here
-    // const isAdmin = await verifyAdminToken(request)
-    // if (!isAdmin) {
-    //   return NextResponse.json({
-    //     success: false,
-    //     error: 'Unauthorized'
-    //   }, { status: 401 })
-    // }
-
-    // TODO: Update order in database
-    const updatedOrder = {
-      id: orderId,
-      status: status,
-      adminNotes: adminNotes,
-      updatedAt: new Date().toISOString(),
-      updatedBy: 'admin' // TODO: Get actual admin ID
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedOrder,
-      message: 'Order status updated successfully'
-    })
-  } catch (error) {
-    console.error('Admin order update error:', error)
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to update order'
-    }, { status: 500 })
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const orderId = searchParams.get('orderId')
-
-    if (!orderId) {
-      return NextResponse.json({
-        success: false,
-        error: 'Order ID is required'
-      }, { status: 400 })
-    }
-
-    // TODO: Add admin authentication check
-    // TODO: Delete/cancel order in database
-
-    return NextResponse.json({
-      success: true,
-      message: 'Order cancelled successfully'
-    })
-  } catch (error) {
-    console.error('Admin order deletion error:', error)
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to cancel order'
-    }, { status: 500 })
   }
 }
 
