@@ -236,6 +236,18 @@ export default function AdminCenter() {
     }
   }
 
+  const handleOrderClick = (order: Order, index: number) => {
+    // Emit order selection event
+    window.dispatchEvent(new CustomEvent('orderSelected', {
+      detail: { order, index }
+    }))
+  }
+
+  const handleOrderDeselect = () => {
+    // Emit order deselection event
+    window.dispatchEvent(new CustomEvent('orderDeselected'))
+  }
+
   // Debug log
   console.log('Admin Center State:', {
     loading,
@@ -294,7 +306,11 @@ export default function AdminCenter() {
           </div>
         ) : (
           orders.map((order, index) => (
-            <div key={order.fullId} className="bg-[#1D1C1C] rounded-md py-2 px-2">
+            <div 
+              key={order.fullId} 
+              className="bg-[#1D1C1C] rounded-md py-2 px-2 cursor-pointer hover:bg-[#2A2A2A] transition-colors border-2 border-transparent hover:border-purple-500/50"
+              onClick={() => handleOrderClick(order, index)}
+            >
               {/* Order Header with Details in Same Row */}
               <div className="flex items-center justify-between mb-3">
                 {/* Left - Order ID and Time */}

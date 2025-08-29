@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Copy,
@@ -13,6 +13,9 @@ import {
   Check,
   CheckCheck,
   CircleQuestionMark,
+  Building,
+  CreditCard as BankIcon,
+  User,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -21,6 +24,19 @@ interface BuyCDMModalProps {
   onClose: () => void;
   amount: string;
   usdtAmount: string;
+}
+  
+interface AdminPaymentDetails {
+  orderId: string;
+  customAmount: number;
+  paymentMethod: string;
+  adminUpiId: string | null;
+  adminBankDetails: {
+    accountNumber: string;
+    ifscCode: string;
+    branchName: string;
+    accountHolderName: string;
+  };
 }
 
 export default function BuyCDMModal({
@@ -37,28 +53,80 @@ export default function BuyCDMModal({
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("");
   const [ifscCode, setIfscCode] = useState("");
   const [branchName, setBranchName] = useState("");
+  const [adminPaymentDetails, setAdminPaymentDetails] = useState<AdminPaymentDetails | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const handleCopyUPI = () => {
-    navigator.clipboard.writeText("Adminftrs@okaxis");
+  // Listen for admin payment details
+  useEffect(() => {
+    const handleAdminPaymentDetails = (event: CustomEvent) => {
+      console.log('Admin payment details received:', event.detail);
+      if (event.detail.paymentMethod === 'BUY_CDM') {
+        setAdminPaymentDetails(event.detail);
+      }
+    };
+
+    window.addEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
+
+    return () => {
+      window.removeEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
+    };
+  }, []);
+
+  // Reset modal state when opened
+  useEffect(() => {
+    if (isOpen) {
+      setIsPaid(false);
+      setIsWaitingConfirmation(false);
+      setIsUploadComplete(false);
+      setIsOrderComplete(false);
+      setAdminPaymentDetails(null);
+      setCopiedField(null);
+      setAccountNumber("");
+      setConfirmAccountNumber("");
+      setIfscCode("");
+      setBranchName("");
+    }
+  }, [isOpen]);
+
+  const displayAmount = adminPaymentDetails?.customAmount 
+    ? adminPaymentDetails.customAmount.toString() 
+    : amount;
+
+  const hasReceivedAdminDetails = !!adminPaymentDetails?.adminBankDetails;
+
+  // Default bank details shown before admin sends custom ones
+  const defaultBankDetails = {
+    accountNumber: "XXXX-XXXX-XXXX",
+    ifscCode: "WAIT001",
+    branchName: "Waiting for Admin",
+    accountHolderName: "Admin Name"
+  };
+
+  const displayBankDetails = adminPaymentDetails?.adminBankDetails || defaultBankDetails;
+
+  const handleCopy = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
   };
 
   const handlePaymentConfirm = () => {
     setIsWaitingConfirmation(true);
-
-    // Simulate waiting for confirmation
     setTimeout(() => {
       setIsPaid(true);
-    }, 3000); // Wait 3 seconds before showing confirmation
+    }, 2000);
   };
 
   const handleUploadDetails = () => {
     setIsUploadComplete(true);
-    console.log("Upload Full Payment Details clicked");
   };
 
   const handleCoinReceived = () => {
     setIsOrderComplete(true);
-    console.log("Coin Received on Wallet clicked");
   };
 
   return (
@@ -73,18 +141,9 @@ export default function BuyCDMModal({
           <motion.div
             className="bg-[#111010] rounded-t-xl md:rounded-xl max-w-4xl w-full relative overflow-hidden max-h-[90vh] md:max-h-[90vh]"
             initial={{
-              scale:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1
-                  : 0.9,
-              opacity:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1
-                  : 0,
-              y:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? "100%"
-                  : 0,
+              scale: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0.9,
+              opacity: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0,
+              y: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : 0,
             }}
             animate={{
               scale: 1,
@@ -92,26 +151,23 @@ export default function BuyCDMModal({
               y: 0,
             }}
             exit={{
-              scale:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1
-                  : 0.9,
-              opacity:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? 1
-                  : 0,
-              y:
-                typeof window !== "undefined" && window.innerWidth < 768
-                  ? "100%"
-                  : 0,
+              scale: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0.9,
+              opacity: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0,
+              y: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : 0,
             }}
             transition={{ type: "spring", duration: 0.3 }}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-[#2F2F2F]">
               <div className="flex items-center space-x-3">
-                <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                <span className="text-white font-medium">Order 14</span>
+                <div className={`w-3 h-3 rounded-full ${
+                  isOrderComplete ? "bg-gray-400" :
+                  isUploadComplete ? "bg-green-400" :
+                  hasReceivedAdminDetails ? "bg-blue-400" : "bg-yellow-400"
+                }`}></div>
+                <span className="text-white font-medium">
+                  {hasReceivedAdminDetails ? 'Admin Details Received' : 'Waiting for Admin'}
+                </span>
               </div>
 
               {/* Desktop - Centered "How to buy" */}
@@ -132,10 +188,49 @@ export default function BuyCDMModal({
             {/* Scrollable Main Content */}
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
               <div className="p-4 text-center">
+                {/* Order Status Messages */}
+                {!hasReceivedAdminDetails && (
+                  <motion.div
+                    className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                      <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                      <span className="text-yellow-400 font-medium">Order Placed Successfully</span>
+                    </div>
+                    <p className="text-gray-300 text-sm">
+                      Waiting for admin to accept your order and provide bank details
+                    </p>
+                  </motion.div>
+                )}
+
+                {hasReceivedAdminDetails && (
+                  <motion.div
+                    className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                      <Check className="w-5 h-5 text-green-400" />
+                      <span className="text-green-400 font-medium">Admin Bank Details Received</span>
+                    </div>
+                    <p className="text-gray-300 text-sm">
+                      Please transfer to the admin's bank account below
+                    </p>
+                  </motion.div>
+                )}
+
                 {/* Amount Display */}
                 <div className="mb-6">
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
-                    {amount}₹
+                    {displayAmount}₹
+                    {hasReceivedAdminDetails && adminPaymentDetails?.customAmount && (
+                      <div className="text-sm text-green-400 font-normal">
+                        (Custom amount set by admin)
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center justify-center">
                     <svg
@@ -167,42 +262,142 @@ export default function BuyCDMModal({
                     Buy Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    Today 11:40 PM
+                    {new Date().toLocaleTimeString()}
                   </span>
                 </div>
 
-                {/* Payment Instructions - Hide when waiting for confirmation */}
-                {!isWaitingConfirmation && !isPaid && (
+                {/* Payment Instructions */}
+                {hasReceivedAdminDetails && !isWaitingConfirmation && !isPaid && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
-                      Please pay Fixed charge of
-                      <br />
-                      500 ₹ to this UPI ID
+                      Please transfer {displayAmount}₹ to admin's bank account
                     </div>
                     <div className="text-[#26AF6C] text-xs flex items-center justify-center mb-4">
                       <TriangleAlert className="w-3 h-3 mr-1" />
-                      Pay only through registered UPI
+                      Transfer only to the admin's bank account provided below
                     </div>
                   </div>
                 )}
 
-                {/* UPI ID Section - Always visible */}
-                <div className="flex items-center justify-center mb-6">
-                  <div className="flex items-center justify-between bg-[#2a2a2a] rounded-lg px-4 py-3 min-w-[280px] md:min-w-[325px] max-w-md w-full mx-4">
-                    <span className="text-white font-medium text-lg md:text-lg">
-                      Adminftrs@okaxis
-                    </span>
-                    <button
-                      onClick={handleCopyUPI}
-                      className="text-gray-400 hover:text-white transition-colors ml-4"
-                    >
-                      <Copy className="w-5 h-5" />
-                    </button>
+                {!hasReceivedAdminDetails && (
+                  <div className="mb-8">
+                    <div className="text-white mb-1">
+                      Your order is pending admin approval
+                    </div>
+                    <div className="text-gray-400 text-xs flex items-center justify-center mb-4">
+                      <Clock className="w-3 h-3 mr-1" />
+                      You will receive bank details once admin accepts your order
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Account Details Section - Show when waiting for confirmation */}
-                {(isWaitingConfirmation || isPaid) && (
+                {/* Bank Details Section */}
+                <motion.div
+                  className="mb-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className={`rounded-xl p-6 mx-auto max-w-2xl ${
+                    hasReceivedAdminDetails ? 'bg-[#1a1a1a]' : 'bg-[#1a1a1a]/50 border border-dashed border-gray-600'
+                  }`}>
+                    <div className="flex items-center justify-center space-x-2 mb-6">
+                      <Building className={`w-6 h-6 ${hasReceivedAdminDetails ? 'text-purple-400' : 'text-gray-500'}`} />
+                      <h3 className={`text-xl font-semibold ${hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'}`}>
+                        {hasReceivedAdminDetails ? 'Admin Bank Details' : 'Waiting for Bank Details'}
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Account Number */}
+                      <div className="md:col-span-2">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <BankIcon className={`w-4 h-4 ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <span className={`text-sm ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`}>Account Number</span>
+                        </div>
+                        <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${
+                          hasReceivedAdminDetails ? 'bg-[#2a2a2a]' : 'bg-[#2a2a2a]/50'
+                        }`}>
+                          <span className={`font-medium text-lg ${hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'}`}>
+                            {displayBankDetails.accountNumber}
+                          </span>
+                          {hasReceivedAdminDetails && (
+                            <button
+                              onClick={() => handleCopy(displayBankDetails.accountNumber, 'account')}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              {copiedField === 'account' ? (
+                                <Check className="w-5 h-5 text-green-400" />
+                              ) : (
+                                <Copy className="w-5 h-5" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* IFSC Code */}
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <FileText className={`w-4 h-4 ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <span className={`text-sm ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`}>IFSC Code</span>
+                        </div>
+                        <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${
+                          hasReceivedAdminDetails ? 'bg-[#2a2a2a]' : 'bg-[#2a2a2a]/50'
+                        }`}>
+                          <span className={`font-medium ${hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'}`}>
+                            {displayBankDetails.ifscCode}
+                          </span>
+                          {hasReceivedAdminDetails && (
+                            <button
+                              onClick={() => handleCopy(displayBankDetails.ifscCode, 'ifsc')}
+                              className="text-gray-400 hover:text-white transition-colors"
+                            >
+                              {copiedField === 'ifsc' ? (
+                                <Check className="w-5 h-5 text-green-400" />
+                              ) : (
+                                <Copy className="w-5 h-5" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Branch Name */}
+                      <div>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Building className={`w-4 h-4 ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <span className={`text-sm ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`}>Branch Name</span>
+                        </div>
+                        <div className={`rounded-lg px-4 py-3 ${
+                          hasReceivedAdminDetails ? 'bg-[#2a2a2a]' : 'bg-[#2a2a2a]/50'
+                        }`}>
+                          <span className={`font-medium ${hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'}`}>
+                            {displayBankDetails.branchName}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Account Holder Name */}
+                      <div className="md:col-span-2">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <User className={`w-4 h-4 ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <span className={`text-sm ${hasReceivedAdminDetails ? 'text-gray-400' : 'text-gray-600'}`}>Account Holder Name</span>
+                        </div>
+                        <div className={`rounded-lg px-4 py-3 ${
+                          hasReceivedAdminDetails ? 'bg-[#2a2a2a]' : 'bg-[#2a2a2a]/50'
+                        }`}>
+                          <span className={`font-medium ${hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'}`}>
+                            {displayBankDetails.accountHolderName}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* User Account Details Section - Show when waiting for confirmation */}
+                {(isWaitingConfirmation || isPaid) && hasReceivedAdminDetails && (
                   <motion.div
                     className="mb-8"
                     initial={{ opacity: 0, height: 0 }}
@@ -213,22 +408,10 @@ export default function BuyCDMModal({
                       {/* Header */}
                       <div className="flex items-center justify-between mb-6">
                         <h3 className="text-white text-lg md:text-xl font-semibold">
-                          Admin bank Details
+                          Your Bank Details
                         </h3>
                         <button className="text-gray-400 hover:text-white">
-                          <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
+                          <FileText className="w-5 h-5" />
                         </button>
                       </div>
 
@@ -252,19 +435,7 @@ export default function BuyCDMModal({
                         {/* IFSC Code */}
                         <div>
                           <label className="flex items-center text-white text-sm mb-2">
-                            <svg
-                              className="w-4 h-4 mr-2"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                              />
-                            </svg>
+                            <FileText className="w-4 h-4 mr-2" />
                             IFSC CODE
                           </label>
                           <input
@@ -285,9 +456,7 @@ export default function BuyCDMModal({
                           <input
                             type="text"
                             value={confirmAccountNumber}
-                            onChange={(e) =>
-                              setConfirmAccountNumber(e.target.value)
-                            }
+                            onChange={(e) => setConfirmAccountNumber(e.target.value)}
                             placeholder="type your Account number again"
                             className="w-full bg-[#2a2a2a] border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
                           />
@@ -296,19 +465,7 @@ export default function BuyCDMModal({
                         {/* Branch Name */}
                         <div>
                           <label className="flex items-center text-white text-sm mb-2">
-                            <svg
-                              className="w-4 h-4 mr-2"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                              />
-                            </svg>
+                            <Building className="w-4 h-4 mr-2" />
                             Your branch Name
                           </label>
                           <input
@@ -336,22 +493,25 @@ export default function BuyCDMModal({
                   </motion.div>
                 )}
 
-                {/* Progress Bar - Centered */}
+                {/* Progress Bar */}
                 <div className="flex flex-col items-center mb-8">
                   <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
-                    <div className="bg-[#622DBF] h-2 rounded-full w-3/4"></div>
+                    <div className={`h-2 rounded-full transition-all duration-500 ${
+                      isOrderComplete ? 'w-full bg-green-500' :
+                      isUploadComplete ? 'w-4/5 bg-green-500' :
+                      isPaid ? 'w-3/5 bg-green-500' :
+                      hasReceivedAdminDetails ? 'w-2/5 bg-blue-500' : 'w-1/4 bg-yellow-500'
+                    }`}></div>
                   </div>
                   <div className="text-white text-sm font-medium">
-                    14 : 34 Left
+                    {isOrderComplete ? 'Order Complete' :
+                     isUploadComplete ? 'Receipt Uploaded' :
+                     isPaid ? 'Payment Confirmed' :
+                     hasReceivedAdminDetails ? 'Ready for Payment' : 'Waiting for Admin'}
                   </div>
-                  {isOrderComplete && (
-                    <div className="text-white text-sm font-medium mt-1">
-                      Money has been paid please check and confirm
-                    </div>
-                  )}
                 </div>
 
-                {/* Action Button - Always Purple */}
+                {/* Action Button */}
                 <div className="px-4 md:px-0">
                   <button
                     onClick={
@@ -361,9 +521,16 @@ export default function BuyCDMModal({
                         ? handleCoinReceived
                         : isWaitingConfirmation || isPaid
                         ? handleUploadDetails
-                        : handlePaymentConfirm
+                        : hasReceivedAdminDetails
+                        ? handlePaymentConfirm
+                        : undefined
                     }
-                    className="w-full py-3 rounded-lg font-bold text-white transition-all bg-[#622DBF] hover:bg-purple-700"
+                    disabled={!hasReceivedAdminDetails && !isPaid && !isUploadComplete && !isOrderComplete}
+                    className={`w-full py-3 rounded-lg font-bold text-white transition-all ${
+                      hasReceivedAdminDetails || isPaid || isUploadComplete || isOrderComplete
+                        ? 'bg-[#622DBF] hover:bg-purple-700 cursor-pointer'
+                        : 'bg-gray-600 cursor-not-allowed opacity-50'
+                    }`}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       {isOrderComplete ? (
@@ -381,10 +548,15 @@ export default function BuyCDMModal({
                           <File className="w-5 h-5" />
                           <span>Upload Full Payment Details</span>
                         </>
-                      ) : (
+                      ) : hasReceivedAdminDetails ? (
                         <>
                           <CreditCard className="w-5 h-5" />
-                          <span>I Paid 500 ₹ To Admin</span>
+                          <span>I Paid {displayAmount}₹ To Admin</span>
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="w-5 h-5 animate-pulse" />
+                          <span>Waiting for Admin Approval</span>
                         </>
                       )}
                     </div>

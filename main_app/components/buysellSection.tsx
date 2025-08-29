@@ -177,6 +177,81 @@ export default function BuySellSection() {
     }
   }
 
+  const handlePlaceOrder = async (orderData: any) => {
+    setIsPlacingOrder(true)
+    
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          orderType: orderData.orderType,
+          amount: orderData.amount,
+          usdtAmount: orderData.usdtAmount,
+          buyRate: orderData.buyRate,
+          sellRate: orderData.sellRate,
+          paymentMethod: orderData.paymentMethod
+        })
+      })
+  
+      const result = await response.json()
+      
+      if (result.success) {
+        console.log('Order placed successfully:', result.order)
+        
+        // Show appropriate modal based on order type
+        if (orderData.orderType === 'BUY_UPI') {
+          setShowBuyUPIModal(true)
+        } else if (orderData.orderType === 'BUY_CDM') {
+          setShowBuyCDMModal(true)
+        }
+        
+        // Reset form
+        setAmount('')
+        setActiveTab('')
+        setPaymentMethod('')
+        
+        // Refresh orders and balances
+        refetchOrders()
+        refetchBalances()
+      } else {
+        console.error('Order placement failed:', result.error)
+      }
+    } catch (error) {
+      console.error('Error placing order:', error)
+    } finally {
+      setIsPlacingOrder(false)
+    }
+  }
+  
+  // Update your existing buy order handlers
+  const handleBuyUPI = async () => {
+    const orderData = {
+      orderType: 'BUY_UPI',
+      amount: parseFloat(amount),
+      usdtAmount: (parseFloat(amount) / getBuyRate('UPI')).toFixed(2),
+      buyRate: getBuyRate('UPI'),
+      paymentMethod: 'UPI'
+    }
+    
+    await handlePlaceOrder(orderData)
+  }
+  
+  const handleBuyCDM = async () => {
+    const orderData = {
+      orderType: 'BUY_CDM',
+      amount: parseFloat(amount),
+      usdtAmount: (parseFloat(amount) / getBuyRate('CDM')).toFixed(2),
+      buyRate: getBuyRate('CDM'),
+      paymentMethod: 'CDM'
+    }
+    
+    await handlePlaceOrder(orderData)
+  }
+
   useEffect(() => {
     // Listen for rate updates from admin panel
     const handleRatesUpdated = (event: CustomEvent) => {
