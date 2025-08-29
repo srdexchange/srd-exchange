@@ -62,38 +62,52 @@ export default function AdminRight() {
   const currentBuyRate = currentRate?.buyRate.toString() || '85.6'
   const currentSellRate = currentRate?.sellRate.toString() || '85.6'
 
+  const [isOrderSelected, setIsOrderSelected] = useState(false)
+
   // Listen for order selection events from admin center
   useEffect(() => {
     const handleOrderSelected = (event: CustomEvent) => {
-      console.log('Order selected event received:', event.detail)
-      setSelectedOrder(event.detail.order)
-      setCustomOrderValue(event.detail.order.amount.toString())
-      setIsEditingOrderValue(false)
-      setPaymentDetailsSent(false)
+      console.log('Order selected event received in admin right:', event.detail);
+      const selectedOrderData = event.detail.order;
+      
+      console.log('Setting selected order:', {
+        id: selectedOrderData.id,
+        fullId: selectedOrderData.fullId,
+        orderType: selectedOrderData.orderType,
+        amount: selectedOrderData.amount
+      });
+      
+      setSelectedOrder(selectedOrderData);
+      setCustomOrderValue(selectedOrderData.amount.toString());
+      setIsEditingOrderValue(false);
+      setPaymentDetailsSent(false);
+      setIsOrderSelected(true); // Add this line
       
       // Set the user details tab based on order type
-      if (event.detail.order.currency === 'CDM') {
-        setUserDetailsTab('BANK')
+      if (selectedOrderData.currency === 'CDM') {
+        setUserDetailsTab('BANK');
       } else {
-        setUserDetailsTab('UPI')
+        setUserDetailsTab('UPI');
       }
-    }
+    };
 
     const handleOrderDeselected = () => {
-      setSelectedOrder(null)
-      setCustomOrderValue('')
-      setIsEditingOrderValue(false)
-      setPaymentDetailsSent(false)
-    }
+      console.log('Order deselected');
+      setSelectedOrder(null);
+      setCustomOrderValue('');
+      setIsEditingOrderValue(false);
+      setPaymentDetailsSent(false);
+      setIsOrderSelected(false); // Add this line
+    };
 
-    window.addEventListener('orderSelected', handleOrderSelected as EventListener)
-    window.addEventListener('orderDeselected', handleOrderDeselected as EventListener)
+    window.addEventListener('orderSelected', handleOrderSelected as EventListener);
+    window.addEventListener('orderDeselected', handleOrderDeselected as EventListener);
 
     return () => {
-      window.removeEventListener('orderSelected', handleOrderSelected as EventListener)
-      window.removeEventListener('orderDeselected', handleOrderDeselected as EventListener)
-    }
-  }, [])
+      window.removeEventListener('orderSelected', handleOrderSelected as EventListener);
+      window.removeEventListener('orderDeselected', handleOrderDeselected as EventListener);
+    };
+  }, []);
 
   // Reset input fields when tab changes
   useEffect(() => {
@@ -157,47 +171,84 @@ export default function AdminRight() {
   }
 
   const handleSendPaymentDetails = async (paymentMethod: 'BUY_UPI' | 'BUY_CDM') => {
-    if (!selectedOrder) return
+    if (!selectedOrder) {
+      console.error('No selected order available');
+      return;
+    }
 
+    console.log('🚀 Starting to send payment details for order:', selectedOrder);
     setSendingPaymentDetails(true);
 
     try {
-      const paymentDetails = {
-        orderId: selectedOrder.fullId,
-        customAmount: parseFloat(customOrderValue) || selectedOrder.amount,
-        paymentMethod,
-        adminUpiId: paymentMethod === 'BUY_UPI' ? adminUpiId : null,
-        adminBankDetails: paymentMethod === 'BUY_CDM' ? adminBankDetails : null
+      // Use the fullId as the primary identifier, fallback to id
+      const orderId = selectedOrder.fullId || selectedOrder.id;
+      
+      // Ensure adminUpiId is properly trimmed and not empty
+      const trimmedUpiId = adminUpiId.trim();
+      
+      // Validate required fields
+      if (paymentMethod === 'BUY_UPI') {
+        if (!trimmedUpiId || trimmedUpiId.length === 0) {
+          alert('Please enter a valid UPI ID');
+          setSendingPaymentDetails(false);
+          return;
+        }
+        console.log('✅ UPI ID validation passed:', trimmedUpiId);
+      }
+      
+      if (paymentMethod === 'BUY_CDM' && (!adminBankDetails.accountNumber || !adminBankDetails.ifscCode)) {
+        alert('Please enter complete bank details');
+        setSendingPaymentDetails(false);
+        return;
+      }
+      
+      // Prepare payment details for database
+      const paymentDetailsUpdate = {
+        status: 'ADMIN_APPROVED',
+        adminUpiId: paymentMethod === 'BUY_UPI' ? trimmedUpiId : null,
+        adminBankDetails: paymentMethod === 'BUY_CDM' ? JSON.stringify(adminBankDetails) : null,
+        adminNotes: `Payment details provided. Amount: ${customOrderValue}`,
+        amount: parseFloat(customOrderValue) || selectedOrder.amount // Update amount if custom amount is set
+      };
+
+      // Update order in database with admin payment details
+      const updateResponse = await makeAdminRequest(`/api/admin/orders/${orderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(paymentDetailsUpdate)
+      });
+
+      console.log('✅ Database update response:', updateResponse);
+
+      if (updateResponse.success) {
+        // Mark as sent
+        setPaymentDetailsSent(true);
+        
+        // Show success message
+        setUpdateSuccess(true);
+        setTimeout(() => setUpdateSuccess(false), 3000);
+        
+        console.log('🎉 Payment details saved to database successfully!');
+        
+        // Clear form fields
+        if (paymentMethod === 'BUY_UPI') {
+          setAdminUpiId('');
+        } else {
+          setAdminBankDetails({
+            accountNumber: '',
+            ifscCode: '',
+            branchName: '',
+            accountHolderName: ''
+          });
+        }
+      } else {
+        throw new Error(updateResponse.error || 'Failed to update order');
       }
 
-      console.log('Sending payment details to user:', paymentDetails)
-      
-      // Update order in database with admin payment details
-      await makeAdminRequest(`/api/admin/orders/${selectedOrder.fullId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: 'PAYMENT_SUBMITTED',
-          adminUpiId: paymentDetails.adminUpiId,
-          adminBankDetails: paymentMethod === 'BUY_CDM' ? JSON.stringify(adminBankDetails) : null,
-          adminNotes: `Payment details sent. Amount: ${paymentDetails.customAmount}`
-        })
-      })
-      
-      // Broadcast event to modals
-      window.dispatchEvent(new CustomEvent('adminPaymentDetailsSent', {
-        detail: paymentDetails
-      }))
-
-      // Mark as sent
-      setPaymentDetailsSent(true)
-      
-      // Show success message
-      setUpdateSuccess(true)
-      setTimeout(() => setUpdateSuccess(false), 3000)
     } catch (error) {
-      console.error('Error sending payment details:', error)
+      console.error('💥 Error sending payment details:', error);
+      alert('Failed to send payment details. Please try again.');
     } finally {
-      setSendingPaymentDetails(false)
+      setSendingPaymentDetails(false);
     }
   }
 
@@ -382,9 +433,17 @@ export default function AdminRight() {
           <div className="bg-[#101010] border border-[#3E3E3E] rounded-md p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white font-montserrat">Selected Order</h3>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-green-500 text-sm font-montserrat">Active</span>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-green-500 text-sm font-montserrat">Active</span>
+                </div>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('orderDeselected'))}
+                  className="text-gray-400 hover:text-white text-xs px-3 py-1 rounded bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
+                >
+                  Deselect
+                </button>
               </div>
             </div>
             

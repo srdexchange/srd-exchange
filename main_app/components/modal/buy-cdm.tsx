@@ -18,12 +18,16 @@ import {
   User,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useModalState } from "@/hooks/useModalState";
+import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
+import { useBankDetails } from '@/hooks/useBankDetails'
 
 interface BuyCDMModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: string;
   usdtAmount: string;
+  orderData?: any; // Add orderData prop
 }
   
 interface AdminPaymentDetails {
@@ -44,6 +48,7 @@ export default function BuyCDMModal({
   onClose,
   amount,
   usdtAmount,
+  orderData, // Add this parameter
 }: BuyCDMModalProps) {
   const [isPaid, setIsPaid] = useState(false);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
@@ -53,46 +58,23 @@ export default function BuyCDMModal({
   const [confirmAccountNumber, setConfirmAccountNumber] = useState("");
   const [ifscCode, setIfscCode] = useState("");
   const [branchName, setBranchName] = useState("");
-  const [adminPaymentDetails, setAdminPaymentDetails] = useState<AdminPaymentDetails | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Listen for admin payment details
-  useEffect(() => {
-    const handleAdminPaymentDetails = (event: CustomEvent) => {
-      console.log('Admin payment details received:', event.detail);
-      if (event.detail.paymentMethod === 'BUY_CDM') {
-        setAdminPaymentDetails(event.detail);
-      }
-    };
+  const { saveModalState, getModalState, clearModalState } = useModalState();
 
-    window.addEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
+  // Fetch payment details from database at intervals
+  const { 
+    paymentDetails, 
+    isLoading: isLoadingPaymentDetails, 
+    error: paymentDetailsError 
+  } = useOrderPaymentDetails(
+    orderData?.fullId || orderData?.id, 
+    isOpen && !!orderData
+  );
 
-    return () => {
-      window.removeEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
-    };
-  }, []);
-
-  // Reset modal state when opened
-  useEffect(() => {
-    if (isOpen) {
-      setIsPaid(false);
-      setIsWaitingConfirmation(false);
-      setIsUploadComplete(false);
-      setIsOrderComplete(false);
-      setAdminPaymentDetails(null);
-      setCopiedField(null);
-      setAccountNumber("");
-      setConfirmAccountNumber("");
-      setIfscCode("");
-      setBranchName("");
-    }
-  }, [isOpen]);
-
-  const displayAmount = adminPaymentDetails?.customAmount 
-    ? adminPaymentDetails.customAmount.toString() 
-    : amount;
-
-  const hasReceivedAdminDetails = !!adminPaymentDetails?.adminBankDetails;
+  // Check if admin has provided bank details
+  const hasReceivedAdminDetails = !!(paymentDetails?.adminBankDetails);
+  const displayAmount = paymentDetails?.customAmount?.toString() || amount;
 
   // Default bank details shown before admin sends custom ones
   const defaultBankDetails = {
@@ -102,7 +84,112 @@ export default function BuyCDMModal({
     accountHolderName: "Admin Name"
   };
 
-  const displayBankDetails = adminPaymentDetails?.adminBankDetails || defaultBankDetails;
+  const displayBankDetails = paymentDetails?.adminBankDetails || defaultBankDetails;
+
+  // Load saved state when modal opens
+  useEffect(() => {
+    if (isOpen && orderData) {
+      console.log('📂 Loading CDM modal state for order:', orderData.fullId || orderData.id);
+      const savedState = getModalState(orderData.fullId || orderData.id);
+      if (savedState) {
+        console.log('📋 Restoring CDM modal state:', savedState);
+        
+        // Restore the step states based on saved data
+        if (savedState.currentStep >= 4) {
+          setIsOrderComplete(true);
+          setIsUploadComplete(true);
+          setIsPaid(true);
+          setIsWaitingConfirmation(true);
+        } else if (savedState.currentStep >= 3) {
+          setIsUploadComplete(true);
+          setIsPaid(true);
+          setIsWaitingConfirmation(true);
+          setIsOrderComplete(false);
+        } else if (savedState.currentStep >= 2) {
+          setIsPaid(true);
+          setIsWaitingConfirmation(true);
+          setIsUploadComplete(false);
+          setIsOrderComplete(false);
+        } else if (savedState.currentStep >= 1) {
+          setIsWaitingConfirmation(true);
+          setIsPaid(false);
+          setIsUploadComplete(false);
+          setIsOrderComplete(false);
+        } else {
+          setIsPaid(false);
+          setIsWaitingConfirmation(false);
+          setIsUploadComplete(false);
+          setIsOrderComplete(false);
+        }
+      } else {
+        // No saved state, start fresh
+        console.log('🆕 No saved CDM state found, starting fresh');
+        setIsPaid(false);
+        setIsWaitingConfirmation(false);
+        setIsUploadComplete(false);
+        setIsOrderComplete(false);
+      }
+    }
+  }, [isOpen, orderData]);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (orderData && isOpen) {
+      const currentStep = isOrderComplete ? 4 : isUploadComplete ? 3 : isPaid ? 2 : isWaitingConfirmation ? 1 : 0;
+      
+      console.log('💾 Saving CDM modal state:', {
+        orderId: orderData.fullId || orderData.id,
+        currentStep,
+        hasAdminDetails: !!paymentDetails
+      });
+      
+      saveModalState(
+        orderData.fullId || orderData.id,
+        'BUY_CDM',
+        currentStep,
+        {
+          accountNumber,
+          confirmAccountNumber,
+          ifscCode,
+          branchName
+        },
+        paymentDetails
+      );
+    }
+  }, [isPaid, isWaitingConfirmation, isUploadComplete, isOrderComplete, paymentDetails, orderData, isOpen, accountNumber, confirmAccountNumber, ifscCode, branchName]);
+
+  // Reset modal state when opened for new orders (without orderData)
+  useEffect(() => {
+    if (isOpen && !orderData) {
+      console.log('🔄 Resetting CDM modal state for new order');
+      setIsPaid(false);
+      setIsWaitingConfirmation(false);
+      setIsUploadComplete(false);
+      setIsOrderComplete(false);
+      setCopiedField(null);
+      setAccountNumber("");
+      setConfirmAccountNumber("");
+      setIfscCode("");
+      setBranchName("");
+    }
+  }, [isOpen, orderData]);
+
+  // Debug logging
+  useEffect(() => {
+    if (isOpen && orderData) {
+      console.log('🖥️ Buy CDM Modal State Debug:', {
+        orderData: orderData?.fullId || orderData?.id,
+        hasReceivedAdminDetails,
+        paymentDetails,
+        displayBankDetails,
+        isLoadingPaymentDetails,
+        isPaid,
+        isWaitingConfirmation,
+        isUploadComplete,
+        isOrderComplete
+      });
+    }
+  }, [isOpen, hasReceivedAdminDetails, paymentDetails, orderData, displayBankDetails, isLoadingPaymentDetails, isPaid, isWaitingConfirmation, isUploadComplete, isOrderComplete]);
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -128,6 +215,15 @@ export default function BuyCDMModal({
   const handleCoinReceived = () => {
     setIsOrderComplete(true);
   };
+
+  const handleOrderComplete = () => {
+    if (orderData) {
+      clearModalState(orderData.fullId || orderData.id);
+    }
+    onClose();
+  };
+
+  const { bankDetails } = useBankDetails()
 
   return (
     <AnimatePresence>
@@ -166,7 +262,7 @@ export default function BuyCDMModal({
                   hasReceivedAdminDetails ? "bg-blue-400" : "bg-yellow-400"
                 }`}></div>
                 <span className="text-white font-medium">
-                  {hasReceivedAdminDetails ? 'Admin Details Received' : 'Waiting for Admin'}
+                  Order {orderData?.id || orderData?.fullId?.slice(-6) || '#14'}
                 </span>
               </div>
 
@@ -188,8 +284,22 @@ export default function BuyCDMModal({
             {/* Scrollable Main Content */}
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
               <div className="p-4 text-center">
+                {/* Loading State */}
+                {isLoadingPaymentDetails && !hasReceivedAdminDetails && (
+                  <motion.div
+                    className="mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-blue-400 font-medium">Checking for Admin Updates...</span>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Order Status Messages */}
-                {!hasReceivedAdminDetails && (
+                {!hasReceivedAdminDetails && !isLoadingPaymentDetails && (
                   <motion.div
                     className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
                     initial={{ opacity: 0, y: -20 }}
@@ -226,7 +336,7 @@ export default function BuyCDMModal({
                 <div className="mb-6">
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
                     {displayAmount}₹
-                    {hasReceivedAdminDetails && adminPaymentDetails?.customAmount && (
+                    {hasReceivedAdminDetails && paymentDetails?.customAmount && displayAmount !== amount && (
                       <div className="text-sm text-green-400 font-normal">
                         (Custom amount set by admin)
                       </div>
@@ -262,7 +372,7 @@ export default function BuyCDMModal({
                     Buy Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    {new Date().toLocaleTimeString()}
+                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today 11:40 PM'}
                   </span>
                 </div>
 
@@ -279,14 +389,14 @@ export default function BuyCDMModal({
                   </div>
                 )}
 
-                {!hasReceivedAdminDetails && (
+                {!hasReceivedAdminDetails && !isLoadingPaymentDetails && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
                       Your order is pending admin approval
                     </div>
                     <div className="text-gray-400 text-xs flex items-center justify-center mb-4">
                       <Clock className="w-3 h-3 mr-1" />
-                      You will receive bank details once admin accepts your order
+                      Checking for updates every 10 seconds...
                     </div>
                   </div>
                 )}
@@ -425,10 +535,11 @@ export default function BuyCDMModal({
                           </label>
                           <input
                             type="text"
-                            value={accountNumber}
+                            value={bankDetails?.accountNumber || accountNumber}
                             onChange={(e) => setAccountNumber(e.target.value)}
-                            placeholder="Add your Account Number"
+                            placeholder={bankDetails?.accountNumber || "Add your Account Number"}
                             className="w-full bg-[#2a2a2a] border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                            readOnly={!!bankDetails?.accountNumber}
                           />
                         </div>
 
@@ -516,7 +627,7 @@ export default function BuyCDMModal({
                   <button
                     onClick={
                       isOrderComplete
-                        ? onClose 
+                        ? handleOrderComplete 
                         : isUploadComplete
                         ? handleCoinReceived
                         : isWaitingConfirmation || isPaid

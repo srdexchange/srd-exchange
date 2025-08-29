@@ -32,6 +32,7 @@ export default function AdminCenter() {
   const [orderStatuses, setOrderStatuses] = useState<{[key: string]: {[key: string]: 'waiting' | 'completed'}}>({})
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [selectedOrderIndex, setSelectedOrderIndex] = useState<number | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,16 +43,13 @@ export default function AdminCenter() {
   useEffect(() => {
     fetchAcceptedOrders()
     
-    // Listen for order acceptance events from left panel
     const handleOrderAccepted = (event: CustomEvent) => {
       console.log('Order accepted event received:', event.detail)
-      // Refresh accepted orders when an order is accepted
-      setTimeout(() => fetchAcceptedOrders(), 1000) // Small delay to ensure DB is updated
+      setTimeout(() => fetchAcceptedOrders(), 1000)
     }
     
     window.addEventListener('orderAccepted', handleOrderAccepted as EventListener)
     
-    // Also set up periodic refresh every 30 seconds
     const interval = setInterval(() => {
       if (address) {
         fetchAcceptedOrders()
@@ -77,11 +75,9 @@ export default function AdminCenter() {
     try {
       console.log('Fetching accepted orders for admin center...')
       
-      // Fetch all pending orders and filter for accepted ones
       const data = await makeAdminRequest('/api/admin/orders?status=pending')
       
       if (data.success) {
-        // Filter to only show accepted orders (not just pending)
         const acceptedOrders = data.orders.filter((order: Order) => 
           ['ADMIN_APPROVED', 'PAYMENT_SUBMITTED'].includes(order.status)
         )
@@ -113,7 +109,6 @@ export default function AdminCenter() {
 
       if (data.success) {
         console.log('Order status updated successfully')
-        // Refresh orders
         fetchAcceptedOrders()
       } else {
         console.error('Failed to update order status:', data.error)
@@ -131,13 +126,11 @@ export default function AdminCenter() {
       let newStatus: 'waiting' | 'completed'
       
       if (hasUserIcon(tag, orderIndex)) {
-        // User buttons: cycle through gray -> purple (waiting) -> green (completed)
         if (!currentStatus) {
           newStatus = 'waiting'
         } else if (currentStatus === 'waiting') {
           newStatus = 'completed'
           
-          // Handle specific completion actions
           if (tag.toLowerCase() === 'complete') {
             updateOrderStatus(order.fullId, 'COMPLETED')
           }
@@ -145,10 +138,8 @@ export default function AdminCenter() {
           newStatus = 'waiting'
         }
       } else {
-        // Non-user buttons: toggle between gray and green
         newStatus = currentStatus === 'completed' ? undefined as any : 'completed'
         
-        // Handle admin actions
         if (newStatus === 'completed') {
           if (tag.toLowerCase() === 'verified') {
             updateOrderStatus(order.fullId, 'PAYMENT_SUBMITTED')
@@ -192,7 +183,6 @@ export default function AdminCenter() {
   const getTagColor = (tag: string, orderIndex: number) => {
     const status = getButtonStatus(orderIndex, tag)
     
-    // Buttons with user icons
     if (hasUserIcon(tag, orderIndex)) {
       switch (status) {
         case 'waiting':
@@ -204,7 +194,6 @@ export default function AdminCenter() {
       }
     }
     
-    // Buttons without user icons
     switch (status) {
       case 'completed':
         return 'bg-green-600 text-white'
@@ -217,12 +206,10 @@ export default function AdminCenter() {
     const normalizedTag = tag.toLowerCase()
     const order = orders[orderIndex]
     
-    // For CDM Buy orders, special logic
     if (order.currency === 'CDM' && order.type.includes('Buy')) {
       return ['pay info(full)', 'bank details', 'complete'].includes(normalizedTag)
     }
     
-    // For all other orders (UPI and Sell orders)
     return ['pay info', 'pay info(full)', 'paid', 'complete'].includes(normalizedTag)
   }
 
@@ -231,24 +218,54 @@ export default function AdminCenter() {
       return ['Accepted', 'Pay info(full)', 'Paid', 'Bank details', 'Paid', 'Verified', 'Complete']
     } else if (order.orderType === 'BUY_UPI') {
       return ['Accepted', 'Pay info', 'Verified', 'Paid', 'Verified', 'Complete']
-    } else { // SELL
+    } else {
       return ['Accepted', 'Paid', 'Verified', 'Complete']
     }
   }
 
   const handleOrderClick = (order: Order, index: number) => {
-    // Emit order selection event
+    setSelectedOrder(order)
+    setSelectedOrderIndex(index)
+    
     window.dispatchEvent(new CustomEvent('orderSelected', {
       detail: { order, index }
     }))
   }
 
   const handleOrderDeselect = () => {
-    // Emit order deselection event
+    setSelectedOrder(null)
+    setSelectedOrderIndex(null)
+    
     window.dispatchEvent(new CustomEvent('orderDeselected'))
   }
 
-  // Debug log
+  useEffect(() => {
+    const handleExternalOrderDeselect = () => {
+      setSelectedOrder(null)
+      setSelectedOrderIndex(null)
+    }
+
+    window.addEventListener('orderDeselected', handleExternalOrderDeselect as EventListener)
+    
+    return () => {
+      window.removeEventListener('orderDeselected', handleExternalOrderDeselect as EventListener)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && selectedOrder) {
+        handleOrderDeselect()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress)
+    }
+  }, [selectedOrder])
+
   console.log('Admin Center State:', {
     loading,
     ordersCount: orders.length,
@@ -258,13 +275,17 @@ export default function AdminCenter() {
 
   return (
     <div className="bg-[#141414] text-white h-full py-4 px-2 overflow-y-auto">
-      {/* Header */}
       <div className="flex bg-[#1E1E1E] rounded-sm items-center justify-center mb-6 space-x-2">
         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
         <h2 className="text-lg font-semibold text-white p-2">Accepted Orders</h2>
+        {selectedOrder && (
+          <div className="flex items-center space-x-1 text-xs bg-purple-600/20 px-2 py-1 rounded">
+            <div className="w-1.5 h-1.5 bg-purple-400 rounded-full"></div>
+            <span className="text-purple-400">Selected: {selectedOrder.id}</span>
+          </div>
+        )}
       </div>
 
-      {/* Error Display */}
       {error && (
         <div className="mb-4 p-3 bg-red-600/20 border border-red-600/50 rounded text-sm text-red-300">
           <div className="font-medium">Error:</div>
@@ -272,7 +293,6 @@ export default function AdminCenter() {
         </div>
       )}
 
-      {/* Wallet Connection Status */}
       {!address && (
         <div className="mb-4 p-3 bg-yellow-600/20 border border-yellow-600/50 rounded text-sm text-yellow-300">
           <div className="font-medium">Admin wallet not connected</div>
@@ -280,7 +300,6 @@ export default function AdminCenter() {
         </div>
       )}
 
-      {/* Orders List */}
       <div className="space-y-4">
         {loading ? (
           <div className="text-center py-8">
@@ -308,26 +327,58 @@ export default function AdminCenter() {
           orders.map((order, index) => (
             <div 
               key={order.fullId} 
-              className="bg-[#1D1C1C] rounded-md py-2 px-2 cursor-pointer hover:bg-[#2A2A2A] transition-colors border-2 border-transparent hover:border-purple-500/50"
+              className={`rounded-md py-2 px-2 cursor-pointer transition-all duration-200 ${
+                selectedOrderIndex === index
+                  ? 'bg-gradient-to-r from-purple-600/30 to-purple-500/20 border-2 border-purple-500 shadow-lg shadow-purple-500/20'
+                  : 'bg-[#1D1C1C] border-2 border-transparent hover:bg-[#2A2A2A] hover:border-purple-500/30'
+              }`}
               onClick={() => handleOrderClick(order, index)}
             >
-              {/* Order Header with Details in Same Row */}
+              {selectedOrderIndex === index && (
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                    <span className="text-purple-400 text-xs font-medium">SELECTED ORDER</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleOrderDeselect()
+                    }}
+                    className="text-gray-400 hover:text-white text-xs px-2 py-1 rounded bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
+                  >
+                    Deselect
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-3">
-                {/* Left - Order ID and Time */}
                 <div>
-                  <span className="text-white text-md">{order.id}</span>
-                  <div className="text-white text-xs">{order.time}</div>
-                  <div className="text-xs text-gray-400 mt-1">
+                  <span className={`text-md font-medium ${
+                    selectedOrderIndex === index ? 'text-white' : 'text-white'
+                  }`}>
+                    {order.id}
+                  </span>
+                  <div className={`text-xs ${
+                    selectedOrderIndex === index ? 'text-purple-200' : 'text-white'
+                  }`}>
+                    {order.time}
+                  </div>
+                  <div className={`text-xs mt-1 ${
+                    selectedOrderIndex === index ? 'text-purple-300' : 'text-gray-400'
+                  }`}>
                     {order.user.walletAddress.slice(0, 6)}...{order.user.walletAddress.slice(-4)}
                   </div>
                 </div>
 
-                {/* Middle - Order Details */}
-                <div className="flex items-center space-x-2 border border-[#464646] py-0.5 px-0.5 rounded">
+                <div className={`flex items-center space-x-2 border py-0.5 px-0.5 rounded ${
+                  selectedOrderIndex === index ? 'border-purple-400/50' : 'border-[#464646]'
+                }`}>
                   {order.type.includes("Buy") ? (
-                    // Buy Order: Show Rupee amount first, then Dollar price
                     <>
-                      <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                      <span className={`font-bold py-0.5 px-1.5 rounded-sm flex items-center space-x-1 ${
+                        selectedOrderIndex === index ? 'bg-purple-800/30 text-white' : 'bg-[#222] text-white'
+                      }`}>
                         <span>{order.amount}</span>
                         <span className="text-yellow-500">₹</span>
                       </span>
@@ -339,17 +390,24 @@ export default function AdminCenter() {
                           height={14}
                           className="flex-shrink-0"
                         />
-                        <span className="text-gray-400 text-sm">{order.type}</span>
+                        <span className={`text-sm ${
+                          selectedOrderIndex === index ? 'text-purple-200' : 'text-gray-400'
+                        }`}>
+                          {order.type}
+                        </span>
                       </div>
-                      <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                      <span className={`font-bold py-0.5 px-1.5 rounded-sm flex items-center space-x-1 ${
+                        selectedOrderIndex === index ? 'bg-purple-800/30 text-white' : 'bg-[#222] text-white'
+                      }`}>
                         <span>{order.price}</span>
                         <span className="text-purple-500">$</span>
                       </span>
                     </>
                   ) : (
-                    // Sell Order: Show Dollar amount first, then Rupee price
                     <>
-                      <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                      <span className={`font-bold py-0.5 px-1.5 rounded-sm flex items-center space-x-1 ${
+                        selectedOrderIndex === index ? 'bg-purple-800/30 text-white' : 'bg-[#222] text-white'
+                      }`}>
                         <span>{order.price}</span>
                         <span className="text-purple-500">$</span>
                       </span>
@@ -361,9 +419,15 @@ export default function AdminCenter() {
                           height={14}
                           className="flex-shrink-0"
                         />
-                        <span className="text-gray-400 text-sm">{order.type}</span>
+                        <span className={`text-sm ${
+                          selectedOrderIndex === index ? 'text-purple-200' : 'text-gray-400'
+                        }`}>
+                          {order.type}
+                        </span>
                       </div>
-                      <span className="text-white font-bold bg-[#222] py-0.5 px-1.5 rounded-sm flex items-center space-x-1">
+                      <span className={`font-bold py-0.5 px-1.5 rounded-sm flex items-center space-x-1 ${
+                        selectedOrderIndex === index ? 'bg-purple-800/30 text-white' : 'bg-[#222] text-white'
+                      }`}>
                         <span>{order.amount}</span>
                         <span className="text-yellow-500">₹</span>
                       </span>
@@ -371,7 +435,6 @@ export default function AdminCenter() {
                   )}
                 </div>
 
-                {/* Right - Currency Icon */}
                 <div className="flex items-center space-x-1">
                   {order.currency === "UPI" ? (
                     <Image 
@@ -390,23 +453,32 @@ export default function AdminCenter() {
                       className="flex-shrink-0"
                     />
                   )}
-                  <span className="text-white text-sm">{order.currency}</span>
+                  <span className={`text-sm ${
+                    selectedOrderIndex === index ? 'text-white font-medium' : 'text-white'
+                  }`}>
+                    {order.currency}
+                  </span>
                 </div>
               </div>
 
-              {/* Tags */}
               <div className="flex flex-wrap gap-2">
                 {getOrderTags(order).map((tag, tagIndex) => (
                   <button
                     key={tagIndex}
-                    onClick={() => handleButtonClick(index, tag)}
-                    onDoubleClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleButtonClick(index, tag)
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
                       if (tag === 'Accepted') {
                         handleAcceptedDoubleClick(order)
                       }
                     }}
                     className={`px-3 py-1 rounded-xs text-xs font-medium flex items-center space-x-1 transition-all hover:opacity-80 cursor-pointer ${getTagColor(tag, index)} ${
                       tag === 'Accepted' ? 'hover:bg-red-600' : ''
+                    } ${
+                      selectedOrderIndex === index ? 'shadow-sm' : ''
                     }`}
                   >
                     {hasUserIcon(tag, index) && (
@@ -416,12 +488,31 @@ export default function AdminCenter() {
                   </button>
                 ))}
               </div>
+
+              {selectedOrderIndex !== index && (
+                <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="text-xs text-gray-500 text-center">
+                    Click to select and view details →
+                  </div>
+                </div>
+              )}
             </div>
           ))
         )}
       </div>
 
-      {/* Cancel Order Modal */}
+      {selectedOrder && (
+        <div className="mt-6 pt-4 border-t border-gray-700">
+          <button
+            onClick={handleOrderDeselect}
+            className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded text-sm transition-colors flex items-center justify-center space-x-2"
+          >
+            <span>Clear Selection</span>
+            <span className="text-xs bg-gray-700 px-2 py-1 rounded">ESC</span>
+          </button>
+        </div>
+      )}
+
       <CancelOrderModal
         isOpen={showCancelModal}
         onClose={handleCloseCancelModal}

@@ -6,10 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useWalletManager } from '@/hooks/useWalletManager'
 import { useUserOrders } from '@/hooks/useUserOrders'
 import { useRates } from '@/hooks/useRates'
+import { useModalState } from '@/hooks/useModalState'
 import BuyCDMModal from './modal/buy-cdm'
 import BuyUPIModal from './modal/buy-upi'
 import SellUPIModal from './modal/sell-upi'
 import SellCDMModal from './modal/sell-cdm'
+import BankDetailsModal, { BankDetailsData } from './modal/bank-details-modal'
+import { useBankDetails } from '@/hooks/useBankDetails'
 
 export default function BuySellSection() {
   const [activeTab, setActiveTab] = useState('')
@@ -19,8 +22,12 @@ export default function BuySellSection() {
   const [showBuyUPIModal, setShowBuyUPIModal] = useState(false)
   const [showSellUPIModal, setShowSellUPIModal] = useState(false)
   const [showSellCDMModal, setShowSellCDMModal] = useState(false)
+  const [showBankDetailsModal, setShowBankDetailsModal] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const [currentOrder, setCurrentOrder] = useState<any>(null)
+
+  const { saveModalState } = useModalState()
 
   // Wallet and orders data
   const { 
@@ -39,6 +46,9 @@ export default function BuySellSection() {
 
   // Get dynamic rates
   const { getBuyRate, getSellRate, loading: ratesLoading } = useRates()
+
+  // Add bank details hook
+  const { bankDetails, saveBankDetails, isLoading: bankDetailsLoading } = useBankDetails()
 
   // Get rates based on payment method (default to UPI)
   const currentPaymentMethod = paymentMethod === 'cdm' ? 'CDM' : 'UPI'
@@ -133,6 +143,24 @@ export default function BuySellSection() {
   const handleBuySellClick = async () => {
     if (!isConnected || !amount || parseFloat(amount) <= 0) return
 
+    console.log('🎯 Handle buy/sell click:', { 
+      activeTab, 
+      paymentMethod, 
+      hasBankDetails: !!bankDetails,
+      walletAddress: address 
+    });
+
+    // Check if this is a CDM order and user doesn't have bank details
+    if (paymentMethod === 'cdm' && !bankDetails) {
+      console.log('📋 CDM order requires bank details - opening modal');
+      setShowBankDetailsModal(true)
+      return
+    }
+
+    await proceedWithOrderCreation()
+  }
+
+  const proceedWithOrderCreation = async () => {
     setIsPlacingOrder(true)
 
     try {
@@ -144,112 +172,91 @@ export default function BuySellSection() {
         orderType = paymentMethod === 'cdm' ? 'BUY_CDM' : 'BUY_UPI'
         rate = buyPrice
       } else {
-        orderType = 'SELL'
+        orderType = paymentMethod === 'cdm' ? 'SELL_CDM' : 'SELL'
         rate = sellPrice
       }
+
+      console.log('🚀 Creating order:', { orderType, orderAmount, rate });
 
       const order = await createOrder(orderType, orderAmount, rate)
 
       if (order) {
-        // Refresh orders after successful creation
-        await refetchOrders()
+        console.log('✅ Order created successfully:', {
+          id: order.id,
+          fullId: order.fullId,
+          orderType: order.orderType
+        });
+        
+        // Set current order for modal
+        setCurrentOrder(order);
+        
+        // Save initial modal state and open appropriate modal
+        if (activeTab === 'buy' && paymentMethod === 'cdm') {
+          saveModalState(order.fullId || order.id, 'BUY_CDM', 0, {}, null);
+          setShowBuyCDMModal(true);
+        } else if (activeTab === 'buy' && paymentMethod === 'upi') {
+          saveModalState(order.fullId || order.id, 'BUY_UPI', 0, {}, null);
+          setShowBuyUPIModal(true);
+        } else if (activeTab === 'sell' && paymentMethod === 'upi') {
+          saveModalState(order.fullId || order.id, 'SELL_UPI', 0, {}, null);
+          setShowSellUPIModal(true);
+        } else if (activeTab === 'sell' && paymentMethod === 'cdm') {
+          saveModalState(order.fullId || order.id, 'SELL_CDM', 0, {}, null);
+          setShowSellCDMModal(true);
+        }
         
         // Reset form
         setAmount('')
         
-        console.log('Order created successfully:', order)
-        
-        // Show appropriate modal with the created order
-        if (activeTab === 'buy' && paymentMethod === 'cdm') {
-          setShowBuyCDMModal(true)
-        } else if (activeTab === 'buy' && paymentMethod === 'upi') {
-          setShowBuyUPIModal(true)
-        } else if (activeTab === 'sell' && paymentMethod === 'upi') {
-          setShowSellUPIModal(true)
-        } else if (activeTab === 'sell' && paymentMethod === 'cdm') {
-          setShowSellCDMModal(true)
-        }
+        // Refresh orders after successful creation
+        await refetchOrders()
       }
     } catch (error) {
-      console.error('Error in buy/sell click:', error)
+      console.error('💥 Error in order creation:', error)
     } finally {
       setIsPlacingOrder(false)
     }
   }
 
-  const handlePlaceOrder = async (orderData: any) => {
-    setIsPlacingOrder(true)
+  // Handle bank details save
+  const handleSaveBankDetails = async (details: BankDetailsData): Promise<boolean> => {
+    console.log('💾 Attempting to save bank details');
     
-    try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletAddress: address,
-          orderType: orderData.orderType,
-          amount: orderData.amount,
-          usdtAmount: orderData.usdtAmount,
-          buyRate: orderData.buyRate,
-          sellRate: orderData.sellRate,
-          paymentMethod: orderData.paymentMethod
-        })
-      })
-  
-      const result = await response.json()
+    const success = await saveBankDetails(details)
+    
+    if (success) {
+      console.log('✅ Bank details saved, proceeding with order');
+      setShowBankDetailsModal(false)
       
-      if (result.success) {
-        console.log('Order placed successfully:', result.order)
-        
-        // Show appropriate modal based on order type
-        if (orderData.orderType === 'BUY_UPI') {
-          setShowBuyUPIModal(true)
-        } else if (orderData.orderType === 'BUY_CDM') {
-          setShowBuyCDMModal(true)
-        }
-        
-        // Reset form
-        setAmount('')
-        setActiveTab('')
-        setPaymentMethod('')
-        
-        // Refresh orders and balances
-        refetchOrders()
-        refetchBalances()
-      } else {
-        console.error('Order placement failed:', result.error)
-      }
-    } catch (error) {
-      console.error('Error placing order:', error)
-    } finally {
-      setIsPlacingOrder(false)
-    }
-  }
-  
-  // Update your existing buy order handlers
-  const handleBuyUPI = async () => {
-    const orderData = {
-      orderType: 'BUY_UPI',
-      amount: parseFloat(amount),
-      usdtAmount: (parseFloat(amount) / getBuyRate('UPI')).toFixed(2),
-      buyRate: getBuyRate('UPI'),
-      paymentMethod: 'UPI'
+      // After saving bank details, proceed with order creation
+      setTimeout(() => {
+        proceedWithOrderCreation()
+      }, 500)
+    } else {
+      console.error('❌ Failed to save bank details');
     }
     
-    await handlePlaceOrder(orderData)
+    return success
   }
-  
-  const handleBuyCDM = async () => {
-    const orderData = {
-      orderType: 'BUY_CDM',
-      amount: parseFloat(amount),
-      usdtAmount: (parseFloat(amount) / getBuyRate('CDM')).toFixed(2),
-      buyRate: getBuyRate('CDM'),
-      paymentMethod: 'CDM'
-    }
-    
-    await handlePlaceOrder(orderData)
+
+  const handleCloseBuyCDM = () => {
+    setShowBuyCDMModal(false)
+    setCurrentOrder(null)
+  }
+
+  const handleCloseBuyUPI = () => {
+    setShowBuyUPIModal(false)
+    setCurrentOrder(null)
+  }
+
+  const handleCloseSellUPI = () => {
+    setShowSellUPIModal(false)
+    setCurrentOrder(null)
+  }
+
+  const handleCloseSellCDM = () => {
+    setShowSellCDMModal(false)
+    setCurrentOrder(null)
   }
 
   useEffect(() => {
@@ -269,6 +276,7 @@ export default function BuySellSection() {
       window.removeEventListener('ratesUpdated', handleRatesUpdated as EventListener)
     }
   }, [])
+
 
   return (
     <>
@@ -625,20 +633,24 @@ export default function BuySellSection() {
             {activeTab && paymentMethod && (
               <motion.button 
                 onClick={handleBuySellClick}
-                disabled={!isConnected || isPlacingOrder || !amount || parseFloat(amount) <= 0}
+                disabled={!isConnected || isPlacingOrder || !amount || parseFloat(amount) <= 0 || bankDetailsLoading}
                 className="w-full bg-[#622DBF] hover:bg-purple-700 text-white py-4 sm:py-5 px-6 rounded-xl font-bold text-lg sm:text-xl transition-all shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 disabled:opacity-50 disabled:cursor-not-allowed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                whileHover={{ scale: (!isConnected || isPlacingOrder) ? 1 : 1.02 }}
-                whileTap={{ scale: (!isConnected || isPlacingOrder) ? 1 : 0.98 }}
+                whileHover={{ scale: (!isConnected || isPlacingOrder || bankDetailsLoading) ? 1 : 1.02 }}
+                whileTap={{ scale: (!isConnected || isPlacingOrder || bankDetailsLoading) ? 1 : 0.98 }}
                 transition={{ duration: 0.3 }}
               >
                 {!isConnected 
                   ? 'Connect Wallet to Trade'
+                  : bankDetailsLoading
+                  ? 'Loading Bank Details...'
                   : isPlacingOrder
                   ? `Placing ${activeTab === 'buy' ? 'Buy' : 'Sell'} Order...`
-                  : `${activeTab === 'buy' ? 'Buy' : 'Sell'}`
+                  : paymentMethod === 'cdm' && !bankDetails
+                  ? `Add Bank Details & ${activeTab === 'buy' ? 'Buy' : 'Sell'}`
+                  : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${amount ? `${amount} USDT` : ''}`
                 }
               </motion.button>
             )}
@@ -679,30 +691,41 @@ export default function BuySellSection() {
       {/* Modals */}
       <BuyCDMModal 
         isOpen={showBuyCDMModal}
-        onClose={() => setShowBuyCDMModal(false)}
+        onClose={handleCloseBuyCDM}
         amount={amount}
         usdtAmount={usdtAmount}
+        orderData={currentOrder}
       />
 
       <BuyUPIModal 
         isOpen={showBuyUPIModal}
-        onClose={() => setShowBuyUPIModal(false)}
+        onClose={handleCloseBuyUPI}
         amount={amount}
         usdtAmount={usdtAmount}
+        orderData={currentOrder}
       />
 
       <SellUPIModal 
         isOpen={showSellUPIModal}
-        onClose={() => setShowSellUPIModal(false)}
+        onClose={handleCloseSellUPI}
         usdtAmount={amount}
         amount={rupeeAmount}
+        orderData={currentOrder}
       />
 
       <SellCDMModal 
         isOpen={showSellCDMModal}
-        onClose={() => setShowSellCDMModal(false)}
+        onClose={handleCloseSellCDM}
         usdtAmount={amount}
         amount={rupeeAmount}
+        orderData={currentOrder}
+      />
+
+      <BankDetailsModal
+        isOpen={showBankDetailsModal}
+        onClose={() => setShowBankDetailsModal(false)}
+        onSave={handleSaveBankDetails}
+        isLoading={bankDetailsLoading}
       />
     </>
   )

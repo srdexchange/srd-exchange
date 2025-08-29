@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Clock, Check, CheckCheck, CircleQuestionMark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -9,6 +9,7 @@ interface SellUPIModalProps {
   onClose: () => void;
   usdtAmount: string;
   amount: string;
+  orderData?: any; // Add this prop
 }
 
 export default function SellUPIModal({
@@ -16,9 +17,18 @@ export default function SellUPIModal({
   onClose,
   usdtAmount,
   amount,
+  orderData, // Add this parameter
 }: SellUPIModalProps) {
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const [isMoneyReceived, setIsMoneyReceived] = useState(false);
+
+  // Reset modal state when opened
+  useEffect(() => {
+    if (isOpen && !orderData) {
+      setIsWaitingConfirmation(false);
+      setIsMoneyReceived(false);
+    }
+  }, [isOpen, orderData]);
 
   const handleWaitingConfirmation = () => {
     setIsWaitingConfirmation(true);
@@ -29,6 +39,9 @@ export default function SellUPIModal({
     setIsMoneyReceived(true);
     console.log("Money Received on Account clicked");
   };
+
+  // Get order ID for display
+  const orderDisplayId = orderData ? `Order ${orderData.id || orderData.fullId?.slice(-6) || '14'}` : 'Order 14';
 
   return (
     <AnimatePresence>
@@ -88,7 +101,7 @@ export default function SellUPIModal({
                       : "bg-yellow-400"
                   }`}
                 ></div>
-                <span className="text-white font-medium">Order 14</span>
+                <span className="text-white font-medium">{orderDisplayId}</span>
               </div>
 
               {/* Desktop - Centered "How to sell" */}
@@ -142,7 +155,7 @@ export default function SellUPIModal({
                     Sell Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    Today 11:40 PM
+                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today 11:40 PM'}
                   </span>
                 </div>
 

@@ -13,12 +13,15 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-  
+import { useModalState } from "@/hooks/useModalState";
+import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
+
 interface BuyUPIModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: string;
   usdtAmount: string;
+  orderData?: any; // New prop for order data
 }
 
 interface AdminPaymentDetails {
@@ -34,48 +37,123 @@ export default function BuyUPIModal({
   onClose,
   amount,
   usdtAmount,
+  orderData,
 }: BuyUPIModalProps) {
   const [isPaid, setIsPaid] = useState(false);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const [isCoinReceived, setIsCoinReceived] = useState(false);
-  const [adminPaymentDetails, setAdminPaymentDetails] = useState<AdminPaymentDetails | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  // Listen for admin payment details
+  const { saveModalState, getModalState, clearModalState } = useModalState();
+
+  // Fetch payment details from database at intervals
+  const { 
+    paymentDetails, 
+    isLoading: isLoadingPaymentDetails, 
+    error: paymentDetailsError 
+  } = useOrderPaymentDetails(
+    orderData?.fullId || orderData?.id, 
+    isOpen && !!orderData
+  );
+
+  // Check if admin has provided payment details
+  const hasReceivedAdminDetails = !!(paymentDetails?.adminUpiId);
+  const displayUpiId = paymentDetails?.adminUpiId || "Waiting for admin UPI...";
+  const displayAmount = paymentDetails?.customAmount?.toString() || amount;
+
+  // Load saved state when modal opens
   useEffect(() => {
-    const handleAdminPaymentDetails = (event: CustomEvent) => {
-      console.log('Admin payment details received:', event.detail);
-      if (event.detail.paymentMethod === 'BUY_UPI') {
-        setAdminPaymentDetails(event.detail);
+    if (isOpen && orderData) {
+      console.log('📂 Loading modal state for order:', orderData.fullId || orderData.id);
+      const savedState = getModalState(orderData.fullId || orderData.id);
+      if (savedState) {
+        console.log('📋 Restoring modal state:', savedState);
+        setCurrentStep(savedState.currentStep);
+        
+        // Set component states based on step
+        switch (savedState.currentStep) {
+          case 0:
+            setIsPaid(false);
+            setIsWaitingConfirmation(false);
+            setIsCoinReceived(false);
+            break;
+          case 1:
+            setIsPaid(false);
+            setIsWaitingConfirmation(false);
+            setIsCoinReceived(false);
+            break;
+          case 2:
+            setIsPaid(false);
+            setIsWaitingConfirmation(true);
+            setIsCoinReceived(false);
+            break;
+          case 3:
+            setIsPaid(true);
+            setIsWaitingConfirmation(false);
+            setIsCoinReceived(false);
+            break;
+          case 4:
+            setIsPaid(true);
+            setIsWaitingConfirmation(false);
+            setIsCoinReceived(true);
+            break;
+        }
+      } else {
+        // No saved state, start fresh
+        setCurrentStep(0);
+        setIsPaid(false);
+        setIsWaitingConfirmation(false);
+        setIsCoinReceived(false);
       }
-    };
+    }
+  }, [isOpen, orderData]);
 
-    window.addEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
-
-    return () => {
-      window.removeEventListener('adminPaymentDetailsSent', handleAdminPaymentDetails as EventListener);
-    };
-  }, []);
-
-  // Reset modal state when opened
+  // Auto-advance to step 1 when admin details are received
   useEffect(() => {
-    if (isOpen) {
+    if (hasReceivedAdminDetails && currentStep === 0) {
+      console.log('✅ Admin UPI details received from database:', paymentDetails?.adminUpiId);
+      setCurrentStep(1);
+    }
+  }, [hasReceivedAdminDetails, currentStep, paymentDetails]);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (orderData && isOpen && currentStep >= 0) {
+      saveModalState(
+        orderData.fullId || orderData.id,
+        'BUY_UPI',
+        currentStep,
+        {},
+        paymentDetails
+      );
+    }
+  }, [currentStep, paymentDetails, orderData, isOpen]);
+
+  // Reset modal state when opened for new orders
+  useEffect(() => {
+    if (isOpen && !orderData) {
       setIsPaid(false);
       setIsWaitingConfirmation(false);
       setIsCoinReceived(false);
-      setAdminPaymentDetails(null);
       setCopiedField(null);
+      setCurrentStep(0);
     }
-  }, [isOpen]);
+  }, [isOpen, orderData]);
 
-  // Display logic
-  const displayAmount = adminPaymentDetails?.customAmount 
-    ? adminPaymentDetails.customAmount.toString() 
-    : amount;
-
-  const displayUpiId = adminPaymentDetails?.adminUpiId || "admin@paytm"; // Default admin UPI
-
-  const hasReceivedAdminDetails = !!adminPaymentDetails;
+  // Debug logging
+  useEffect(() => {
+    if (isOpen && orderData) {
+      console.log('🖥️ Buy UPI Modal State Debug:', {
+        orderData: orderData?.fullId || orderData?.id,
+        currentStep,
+        hasReceivedAdminDetails,
+        paymentDetails,
+        displayUpiId,
+        isLoadingPaymentDetails
+      });
+    }
+  }, [isOpen, currentStep, hasReceivedAdminDetails, paymentDetails, orderData, displayUpiId, isLoadingPaymentDetails]);
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -89,15 +167,25 @@ export default function BuyUPIModal({
 
   const handlePaymentConfirm = () => {
     setIsWaitingConfirmation(true);
+    setCurrentStep(2);
   };
 
   const handleWaitingConfirmation = () => {
     setIsPaid(true);
     setIsWaitingConfirmation(false);
+    setCurrentStep(3);
   };
 
   const handleCoinReceived = () => {
     setIsCoinReceived(true);
+    setCurrentStep(4);
+  };
+
+  const handleOrderComplete = () => {
+    if (orderData) {
+      clearModalState(orderData.fullId || orderData.id);
+    }
+    onClose();
   };
 
   return (
@@ -131,29 +219,25 @@ export default function BuyUPIModal({
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-[#2F2F2F]">
               <div className="flex items-center space-x-3">
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    isCoinReceived
-                      ? "bg-gray-400"
-                      : isPaid
-                      ? "bg-green-400"
-                      : hasReceivedAdminDetails
-                      ? "bg-blue-400"
-                      : "bg-yellow-400"
-                  }`}
-                ></div>
+                <div className={`w-3 h-3 rounded-full ${
+                  isCoinReceived
+                    ? "bg-gray-400"
+                    : isPaid
+                    ? "bg-green-400"
+                    : hasReceivedAdminDetails
+                    ? "bg-blue-400"
+                    : "bg-yellow-400"
+                }`}></div>
                 <span className="text-white font-medium">
-                  {hasReceivedAdminDetails ? 'Admin Details Received' : 'Waiting for Admin'}
+                  Order {orderData?.id || orderData?.fullId?.slice(-6) || '#14'}
                 </span>
               </div>
 
-              {/* Desktop - Centered "How to buy" */}
               <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 space-x-1 justify-center items-center text-white text-sm">
                 <CircleQuestionMark className="w-5 h-5" />
                 <span>How to buy?</span>
               </div>
 
-              {/* Close button */}
               <button
                 onClick={onClose}
                 className="text-white hover:text-white transition-colors"
@@ -165,8 +249,22 @@ export default function BuyUPIModal({
             {/* Scrollable Main Content */}
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
               <div className="p-4 text-center">
+                {/* Loading State */}
+                {isLoadingPaymentDetails && currentStep === 0 && (
+                  <motion.div
+                    className="mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-blue-400 font-medium">Checking for Admin Updates...</span>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* Order Status Messages */}
-                {!hasReceivedAdminDetails && (
+                {!hasReceivedAdminDetails && !isLoadingPaymentDetails && (
                   <motion.div
                     className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
                     initial={{ opacity: 0, y: -20 }}
@@ -205,7 +303,7 @@ export default function BuyUPIModal({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
                   >
-                    Admin paid you {usdtAmount} USDT
+                    Payment confirmed by admin
                   </motion.div>
                 )}
 
@@ -249,7 +347,7 @@ export default function BuyUPIModal({
                     Buy Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    {new Date().toLocaleTimeString()}
+                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today 11:40 PM'}
                   </span>
                 </div>
 
@@ -266,14 +364,14 @@ export default function BuyUPIModal({
                   </div>
                 )}
 
-                {!hasReceivedAdminDetails && (
+                {!hasReceivedAdminDetails && !isLoadingPaymentDetails && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
                       Your order is pending admin approval
                     </div>
                     <div className="text-gray-400 text-xs flex items-center justify-center mb-4">
                       <Clock className="w-3 h-3 mr-1" />
-                      You will receive payment details once admin accepts your order
+                      Checking for updates every 10 seconds...
                     </div>
                   </div>
                 )}
@@ -286,11 +384,11 @@ export default function BuyUPIModal({
                     <span className={`font-medium text-lg md:text-lg ${
                       hasReceivedAdminDetails ? 'text-white' : 'text-gray-500'
                     }`}>
-                      {hasReceivedAdminDetails ? displayUpiId : "Waiting for admin UPI..."}
+                      {displayUpiId}
                     </span>
-                    {hasReceivedAdminDetails && (
+                    {hasReceivedAdminDetails && paymentDetails?.adminUpiId && (
                       <button
-                        onClick={() => handleCopy(displayUpiId, 'upi')}
+                        onClick={() => handleCopy(paymentDetails.adminUpiId!, 'upi')}
                         className="text-gray-400 hover:text-white transition-colors ml-4"
                       >
                         {copiedField === 'upi' ? (
@@ -324,7 +422,7 @@ export default function BuyUPIModal({
                   <button
                     onClick={
                       isCoinReceived
-                        ? onClose 
+                        ? handleOrderComplete
                         : isPaid
                         ? handleCoinReceived
                         : isWaitingConfirmation

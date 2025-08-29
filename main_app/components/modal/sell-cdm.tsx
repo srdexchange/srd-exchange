@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Copy,
@@ -12,13 +12,15 @@ import {
   CircleQuestionMark,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { on } from "events";
+import { useBankDetails } from '@/hooks/useBankDetails';
+import { useModalState } from "@/hooks/useModalState";
 
 interface SellCDMModalProps {
   isOpen: boolean;
   onClose: () => void;
   usdtAmount: string;
   amount: string;
+  orderData?: any; // Add this prop
 }
 
 export default function SellCDMModal({
@@ -26,19 +28,99 @@ export default function SellCDMModal({
   onClose,
   usdtAmount,
   amount,
+  orderData, // Add this parameter
 }: SellCDMModalProps) {
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const [isMoneyReceived, setIsMoneyReceived] = useState(false);
+  const { bankDetails } = useBankDetails();
+  const [accountNumber, setAccountNumber] = useState("");
+  
+  const { saveModalState, getModalState, clearModalState } = useModalState();
+
+  // Load saved state when modal opens
+  useEffect(() => {
+    if (isOpen && orderData) {
+      console.log('📂 Loading SELL CDM modal state for order:', orderData.fullId || orderData.id);
+      const savedState = getModalState(orderData.fullId || orderData.id);
+      if (savedState) {
+        console.log('📋 Restoring SELL CDM modal state:', savedState);
+        
+        // Restore the step states based on saved data
+        if (savedState.currentStep >= 2) {
+          setIsMoneyReceived(true);
+          setIsWaitingConfirmation(true);
+        } else if (savedState.currentStep >= 1) {
+          setIsWaitingConfirmation(true);
+          setIsMoneyReceived(false);
+        } else {
+          setIsWaitingConfirmation(false);
+          setIsMoneyReceived(false);
+        }
+      } else {
+        // No saved state, start fresh
+        console.log('🆕 No saved SELL CDM state found, starting fresh');
+        setIsWaitingConfirmation(false);
+        setIsMoneyReceived(false);
+      }
+    }
+  }, [isOpen, orderData]);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (orderData && isOpen) {
+      const currentStep = isMoneyReceived ? 2 : isWaitingConfirmation ? 1 : 0;
+      
+      console.log('💾 Saving SELL CDM modal state:', {
+        orderId: orderData.fullId || orderData.id,
+        currentStep
+      });
+      
+      saveModalState(
+        orderData.fullId || orderData.id,
+        'SELL_CDM',
+        currentStep,
+        { accountNumber },
+        null
+      );
+    }
+  }, [isWaitingConfirmation, isMoneyReceived, orderData, isOpen, accountNumber]);
+
+  // Reset modal state when opened without orderData
+  useEffect(() => {
+    if (isOpen && !orderData) {
+      console.log('🔄 Resetting SELL CDM modal state for new order');
+      setIsWaitingConfirmation(false);
+      setIsMoneyReceived(false);
+      setAccountNumber("");
+    }
+  }, [isOpen, orderData]);
+
+  // Auto-fill account number from saved bank details
+  useEffect(() => {
+    if (bankDetails?.accountNumber && !accountNumber) {
+      setAccountNumber(bankDetails.accountNumber);
+    }
+  }, [bankDetails, accountNumber]);
 
   const handleWaitingConfirmation = () => {
     setIsWaitingConfirmation(true);
-    console.log("Waiting for confirmation clicked");
+    console.log("✅ Waiting for confirmation clicked");
   };
 
   const handleMoneyReceived = () => {
     setIsMoneyReceived(true);
-    console.log("Money Received on Account clicked");
+    console.log("💰 Money Received on Account clicked");
   };
+
+  const handleOrderComplete = () => {
+    if (orderData) {
+      clearModalState(orderData.fullId || orderData.id);
+    }
+    onClose();
+  };
+
+  // Get order ID for display
+  const orderDisplayId = orderData ? `Order ${orderData.id || orderData.fullId?.slice(-6) || '14'}` : 'Order 14';
 
   return (
     <AnimatePresence>
@@ -98,7 +180,7 @@ export default function SellCDMModal({
                       : "bg-yellow-400"
                   }`}
                 ></div>
-                <span className="text-white font-medium">Order 14</span>
+                <span className="text-white font-medium">{orderDisplayId}</span>
               </div>
 
               {/* Desktop - Centered "How to sell" */}
@@ -152,8 +234,37 @@ export default function SellCDMModal({
                     Sell Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    Today 11:40 PM
+                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today 11:40 PM'}
                   </span>
+                </div>
+
+                {/* Your Bank Details */}
+                <div className="mb-6">
+                  {bankDetails ? (
+                    <div className="bg-[#1a1a1a] rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-gray-400 text-sm">Your Bank Account</span>
+                        <span className="text-green-400 text-xs">✓ Saved</span>
+                      </div>
+                      <div className="text-white font-medium text-lg">
+                        {bankDetails.accountHolderName}
+                      </div>
+                      <div className="text-gray-300 text-sm">
+                        {bankDetails.accountNumber} • {bankDetails.ifscCode}
+                      </div>
+                      <div className="text-gray-400 text-xs">
+                        {bankDetails.branchName}
+                      </div>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      placeholder="Add your Account Number"
+                      className="w-full bg-[#2a2a2a] border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+                    />
+                  )}
                 </div>
 
                 {/* Progress Bar - Centered - Hide when waiting confirmation or money received */}
@@ -186,7 +297,7 @@ export default function SellCDMModal({
                   <button
                     onClick={
                       isMoneyReceived
-                        ? onClose 
+                        ? handleOrderComplete
                         : isWaitingConfirmation
                         ? handleMoneyReceived
                         : handleWaitingConfirmation
