@@ -11,7 +11,7 @@ import CancelOrderModal from './modal/cancelOrder'
 import { useAdminContract } from '@/hooks/useAdminContract'
 import { readContract } from '@wagmi/core'
 import { config } from '@/lib/wagmi'
-import { formatUnits } from 'viem'
+import { formatUnits, parseUnits } from 'viem'
 import { useWalletManager } from '@/hooks/useWalletManager'
 
 interface Order {
@@ -89,12 +89,22 @@ export default function AdminCenter() {
   const { getBuyRate, getSellRate } = useRates();
   const [lastCenterRefresh, setLastCenterRefresh] = useState(Date.now());
 
+  // Import all wallet manager functions at the top level
+  const { 
+    createBuyOrderOnChain,
+    completeBuyOrderOnChain,
+    completeSellOrderOnChain,
+    verifyPaymentOnChain,
+    approveOrderOnChain,
+    hash: walletHash,
+    isPending: walletPending
+  } = useWalletManager()
 
   const { 
     handleVerifyPayment, 
     handleCompleteBuyOrder, 
     handleCompleteSellOrder, 
-    handleApproveOrder, // This should now work
+    handleApproveOrder,
     isTransacting,
     lastAction,
     hash 
@@ -349,16 +359,21 @@ export default function AdminCenter() {
             const buyRate = getBuyRate(order.currency as 'UPI' | 'CDM')
             const usdtAmount = (order.amount / buyRate).toFixed(6)
             
-            // Get the wallet manager functions
-            const { createBuyOrderOnChain } = useWalletManager()
+            // Create buy order on blockchain first using the hook function
+            console.log('🔗 Creating buy order on blockchain with:', {
+              usdtAmount,
+              inrAmount: order.amount.toString(),
+              orderType: order.orderType
+            })
             
-            // Create buy order on blockchain first (the function handles parseUnits internally)
             await createBuyOrderOnChain(usdtAmount, order.amount.toString(), order.orderType)
             
             // Wait for the transaction to be mined
-            await new Promise(resolve => setTimeout(resolve, 3000))
+            console.log('⏳ Waiting for buy order creation transaction to be mined...')
+            await new Promise(resolve => setTimeout(resolve, 5000))
             
             // Now complete the buy order (this transfers USDT from admin to user)
+            console.log('💸 Now completing buy order to transfer USDT to user...')
             await handleCompleteBuyOrder(orderIdForBlockchain)
             
           } catch (buyOrderError) {
@@ -429,7 +444,40 @@ export default function AdminCenter() {
         return
       }
       
-      // ... rest of existing logic for other button states ...
+      // Handle other button states (existing logic)
+      setOrderStatuses(prev => {
+        let newStatus: 'waiting' | 'completed' | undefined
+        
+        if (hasUserIcon(tag, orderIndex)) {
+          if (!currentStatus) {
+            newStatus = 'waiting'
+          } else if (currentStatus === 'waiting') {
+            newStatus = 'completed'
+            
+            if (tag.toLowerCase() === 'complete') {
+              updateOrderStatus(order.fullId, 'COMPLETED')
+            }
+          } else {
+            newStatus = 'waiting'
+          }
+        } else {
+          newStatus = currentStatus === 'completed' ? undefined : 'completed'
+          
+          if (newStatus === 'completed') {
+            if (tag.toLowerCase() === 'pay info' || tag.toLowerCase() === 'pay info(full)') {
+              updateOrderStatus(order.fullId, 'ADMIN_SENT_PAYMENT_INFO')
+            }
+          }
+        }
+
+        return {
+          ...prev,
+          [orderIndex]: {
+            ...prev[orderIndex],
+            [tag]: newStatus
+          }
+        }
+      })
       
     } catch (error) {
       console.error('❌ Error in button click handler:', error)
@@ -440,14 +488,14 @@ export default function AdminCenter() {
       
       if (errorMsg.includes('returned no data') || errorMsg.includes('execution reverted')) {
         if (order.orderType.includes('BUY')) {
-          errorMessage = 'Buy order processing failed. This is normal for buy orders as they are created during completion.'
+          errorMessage = 'Buy order processing failed. Creating order on blockchain first, then completing...'
         } else {
           errorMessage = 'Sell order not found on blockchain. The order may not have been created properly.'
         }
       } else if (errorMsg.includes('insufficient')) {
-        errorMessage = 'Insufficient balance. Please ensure admin has enough USDT.'
+        errorMessage = 'Insufficient balance. Please ensure admin has enough USDT and BNB for gas.'
       } else if (errorMsg.includes('allowance')) {
-        errorMessage = 'USDT approval required. The transaction will request approval first.'
+        errorMessage = 'USDT approval required. Please approve USDT spending first.'
       } else if (errorMsg.includes('Order not approved')) {
         errorMessage = 'Order approval in progress. Please wait and try again.'
       } else if (errorMsg.includes('already verified')) {
@@ -458,6 +506,8 @@ export default function AdminCenter() {
         errorMessage = 'Please connect your admin wallet.'
       } else if (errorMsg.includes('switch to a supported BSC network')) {
         errorMessage = 'Please switch to BSC network.'
+      } else if (errorMsg.includes('Invalid hook call')) {
+        errorMessage = 'Component error occurred. Please refresh the page and try again.'
       }
       
       alert(`${errorMessage}\n\nError details: ${errorMsg}`)
@@ -789,6 +839,7 @@ export default function AdminCenter() {
                   ))}
                 </div>
 
+
                 {selectedOrderIndex !== index && (
                   <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="text-xs text-gray-500 text-center">
@@ -828,6 +879,8 @@ export default function AdminCenter() {
               {lastAction === 'verifying' && 'Verifying payment on blockchain...'}
               {lastAction === 'completing_buy' && 'Transferring USDT to user...'}
               {lastAction === 'completing_sell' && 'Completing sell order...'}
+              {lastAction === 'approving' && 'Approving order...'}
+              {lastAction === 'creating_buy' && 'Creating buy order on blockchain...'}
             </span>
           </div>
           {hash && (

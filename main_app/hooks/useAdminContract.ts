@@ -3,13 +3,14 @@ import { useWalletManager } from './useWalletManager'
 
 export function useAdminContract() {
   const [isTransacting, setIsTransacting] = useState(false)
-  const [lastAction, setLastAction] = useState<'verifying' | 'completing_buy' | 'completing_sell' | 'approving' | null>(null)
+  const [lastAction, setLastAction] = useState<'verifying' | 'completing_buy' | 'completing_sell' | 'approving' | 'creating_buy' | null>(null)
   
   const { 
     verifyPaymentOnChain, 
     completeBuyOrderOnChain, 
     completeSellOrderOnChain,
-    approveOrderOnChain, 
+    approveOrderOnChain,
+    createBuyOrderOnChain,
     hash 
   } = useWalletManager()
 
@@ -55,7 +56,6 @@ export function useAdminContract() {
     }
   }
 
-  // Add the missing handleApproveOrder function:
   const handleApproveOrder = async (orderId: number) => {
     try {
       setIsTransacting(true)
@@ -70,11 +70,26 @@ export function useAdminContract() {
     }
   }
 
+  const handleCreateBuyOrder = async (usdtAmount: string, inrAmount: string, orderType: string) => {
+    try {
+      setIsTransacting(true)
+      setLastAction('creating_buy')
+      await createBuyOrderOnChain(usdtAmount, inrAmount, orderType)
+    } catch (error) {
+      console.error('Error creating buy order:', error)
+      throw error
+    } finally {
+      setIsTransacting(false)
+      setLastAction(null)
+    }
+  }
+
   return {
     handleVerifyPayment,
     handleCompleteBuyOrder,
     handleCompleteSellOrder,
     handleApproveOrder,
+    handleCreateBuyOrder,
     isTransacting,
     lastAction,
     hash
