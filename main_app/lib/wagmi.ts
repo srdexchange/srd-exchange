@@ -5,7 +5,6 @@ import {
   injected, 
   metaMask, 
   coinbaseWallet,
-
 } from 'wagmi/connectors'
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!
@@ -29,7 +28,8 @@ if (!projectId) {
 export const config = createConfig({
   chains: [bsc, bscTestnet],
   connectors: [
-    // WalletConnect - Supports 300+ wallets
+    injected(),
+    metaMask(),
     walletConnect({ 
       projectId,
       metadata: {
@@ -37,37 +37,16 @@ export const config = createConfig({
         description: appDescription,
         url: appUrl,
         icons: [appIcon]
-      },
-      showQrModal: true,
-      qrModalOptions: {
-        themeMode: 'dark',
-        themeVariables: {
-          '--wcm-z-index': '9999',
-          '--wcm-background-color': '#0A0A0A',
-          '--wcm-accent-color': '#622DBF'
-        }
-      }
-    }),
-    // Native wallet connectors
-    injected({ 
-      shimDisconnect: true 
-    }),
-    metaMask({
-      dappMetadata: {
-        name: appName,
-        url: appUrl,
       }
     }),
     coinbaseWallet({
       appName,
       appLogoUrl: appIcon,
-      darkMode: true
     }),
-
   ],
   transports: {
-    [bsc.id]: http(process.env.NEXT_PUBLIC_BSC_RPC_URL),
-    [bscTestnet.id]: http(process.env.NEXT_PUBLIC_BSC_TESTNET_RPC_URL),
+    [bsc.id]: http(),
+    [bscTestnet.id]: http(),
   },
   ssr: true,
 })

@@ -10,6 +10,7 @@ import { useRates } from '@/hooks/useRates';
 import CancelOrderModal from "./modal/cancelOrder";
 
 interface Order {
+  usdtAmount: any;
   id: string;
   fullId: string;
   time: string;
@@ -349,13 +350,23 @@ export default function AdminLeftSide() {
             let displayConversion = '';
             
             if (order.orderType.includes('BUY')) {
+              // For buy orders: order.amount is rupees, calculate USDT
               const usdtAmount = (order.amount / buyRate).toFixed(6);
               displayAmount = `₹${order.amount}`;
               displayConversion = `${usdtAmount} USDT`;
             } else {
-              const rupeeAmount = (order.amount * sellRate).toFixed(2);
-              displayAmount = `${order.amount} USDT`;
-              displayConversion = `₹${rupeeAmount}`;
+              // For sell orders: order.usdtAmount is the USDT being sold, order.amount is calculated rupees
+              // We should display the USDT amount from order.usdtAmount, not convert order.amount
+              if (order.usdtAmount) {
+                // Use the stored USDT amount directly
+                displayAmount = `${parseFloat(order.usdtAmount).toFixed(4)} USDT`;
+                displayConversion = `₹${order.amount}`;
+              } else {
+                // Fallback: calculate USDT from rupees (for older orders without usdtAmount)
+                const usdtAmount = (order.amount / sellRate).toFixed(4);
+                displayAmount = `${usdtAmount} USDT`;
+                displayConversion = `₹${order.amount}`;
+              }
             }
             
             return (

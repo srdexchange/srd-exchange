@@ -39,26 +39,29 @@ model BankDetails {
 }
 
 model Order {
-  id                String      @id @default(cuid())
-  userId            String
-  blockchainOrderId String?     // For blockchain order tracking
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount            Decimal
-  usdtAmount        Decimal?    // Add this field for USDT amount
-  orderType         OrderType
-  status            OrderStatus @default(PENDING)
-  paymentProof      String?     // CDM receipt image URL
-  adminUpiId        String?     // UPI ID provided by admin
-  adminBankDetails  String?     // Bank details provided by admin
-  adminNotes        String?
-  buyRate           Decimal?    // Rate at which order was created
-  sellRate          Decimal?    // Rate at which order was created
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                    String      @id @default(cuid())
+  userId                String
+  blockchainOrderId     String?     // Blockchain order ID
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount                Decimal
+  usdtAmount            Decimal?
+  orderType             OrderType
+  status                OrderStatus @default(PENDING)
+  paymentProof          String?
+  adminUpiId            String?
+  adminBankDetails      String?
+  adminNotes            String?
+  buyRate               Decimal?
+  sellRate              Decimal?
+  // Blockchain tracking
+  isVerifiedOnChain     Boolean     @default(false)
+  isCompletedOnChain    Boolean     @default(false)
+  transactionHash       String?     // Transaction hash for USDT transfer
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
   
   @@map("orders")
 }
-
 
 model Rate {
   id          String      @id @default(cuid())
@@ -88,7 +91,11 @@ enum OrderType {
 enum OrderStatus {
   PENDING
   ADMIN_APPROVED
+  ADMIN_SENT_PAYMENT_INFO
   PAYMENT_SUBMITTED
+  PAYMENT_VERIFIED
+  USDT_TRANSFERRED
+  USDT_RECEIVED_BY_ADMIN
   COMPLETED
   CANCELLED
 }

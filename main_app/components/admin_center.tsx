@@ -8,6 +8,7 @@ import { useAdminAPI } from '@/hooks/useAdminAPI'
 import { useUserActivity } from '@/hooks/useUserActivity'
 import { useRates } from '@/hooks/useRates'
 import CancelOrderModal from './modal/cancelOrder'
+import { useAdminContract } from '@/hooks/useAdminContract'
 
 interface Order {
   id: string;
@@ -44,6 +45,15 @@ export default function AdminCenter() {
   const isUserActive = useUserActivity(5000);
   const { getBuyRate, getSellRate } = useRates();
   const [lastCenterRefresh, setLastCenterRefresh] = useState(Date.now());
+
+  const { 
+    handleVerifyPayment, 
+    handleCompleteBuyOrder, 
+    handleCompleteSellOrder, 
+    isTransacting,
+    lastAction,
+    hash 
+  } = useAdminContract()
 
   useEffect(() => {
     fetchAcceptedOrders()
@@ -138,43 +148,99 @@ export default function AdminCenter() {
     }
   }
 
-  const handleButtonClick = (orderIndex: number, tag: string) => {
+  const handleButtonClick = async (orderIndex: number, tag: string) => {
     const order = orders[orderIndex]
+    const currentStatus = orderStatuses[orderIndex]?.[tag]
     
-    setOrderStatuses(prev => {
-      const currentStatus = prev[orderIndex]?.[tag]
-      let newStatus: 'waiting' | 'completed'
+    try {
+      // Handle blockchain interactions for specific tags
+      if (tag.toLowerCase() === 'verified' && !currentStatus) {
+        // First verified button - verify payment on blockchain
+        console.log('🔗 Verifying payment on blockchain...')
+        await handleVerifyPayment(parseInt(order.fullId))
+        
+        // Update database status
+        await updateOrderStatus(order.fullId, 'PAYMENT_VERIFIED')
+        
+        // Update local UI state
+        setOrderStatuses(prev => ({
+          ...prev,
+          [orderIndex]: {
+            ...prev[orderIndex],
+            [tag]: 'completed'
+          }
+        }))
+        
+        return
+      }
       
-      if (hasUserIcon(tag, orderIndex)) {
-        if (!currentStatus) {
-          newStatus = 'waiting'
-        } else if (currentStatus === 'waiting') {
-          newStatus = 'completed'
+      if (tag.toLowerCase() === 'verified' && currentStatus === 'completed') {
+        // Second verified button for buy orders - transfer USDT
+        if (order.orderType.includes('BUY')) {
+          console.log('🔗 Completing buy order and transferring USDT...')
+          await handleCompleteBuyOrder(parseInt(order.fullId))
           
-          if (tag.toLowerCase() === 'complete') {
-            updateOrderStatus(order.fullId, 'COMPLETED')
+          // Update database status
+          await updateOrderStatus(order.fullId, 'USDT_TRANSFERRED')
+          
+          // Auto-mark as completed
+          setOrderStatuses(prev => ({
+            ...prev,
+            [orderIndex]: {
+              ...prev[orderIndex],
+              'Complete': 'completed'
+            }
+          }))
+        } else {
+          // Sell order
+          console.log('🔗 Completing sell order...')
+          await handleCompleteSellOrder(parseInt(order.fullId))
+          
+          await updateOrderStatus(order.fullId, 'USDT_RECEIVED_BY_ADMIN')
+        }
+        
+        return
+      }
+      
+      // Handle other button states (existing logic)
+      setOrderStatuses(prev => {
+        let newStatus: 'waiting' | 'completed' | undefined
+        
+        if (hasUserIcon(tag, orderIndex)) {
+          if (!currentStatus) {
+            newStatus = 'waiting'
+          } else if (currentStatus === 'waiting') {
+            newStatus = 'completed'
+            
+            if (tag.toLowerCase() === 'complete') {
+              updateOrderStatus(order.fullId, 'COMPLETED')
+            }
+          } else {
+            newStatus = 'waiting'
           }
         } else {
-          newStatus = 'waiting'
-        }
-      } else {
-        newStatus = currentStatus === 'completed' ? undefined as any : 'completed'
-        
-        if (newStatus === 'completed') {
-          if (tag.toLowerCase() === 'verified') {
-            updateOrderStatus(order.fullId, 'PAYMENT_SUBMITTED')
+          newStatus = currentStatus === 'completed' ? undefined : 'completed'
+          
+          if (newStatus === 'completed') {
+            if (tag.toLowerCase() === 'pay info' || tag.toLowerCase() === 'pay info(full)') {
+              updateOrderStatus(order.fullId, 'ADMIN_SENT_PAYMENT_INFO')
+            }
           }
         }
-      }
 
-      return {
-        ...prev,
-        [orderIndex]: {
-          ...prev[orderIndex],
-          [tag]: newStatus
+        return {
+          ...prev,
+          [orderIndex]: {
+            ...prev[orderIndex],
+            [tag]: newStatus
+          }
         }
-      }
-    })
+      })
+      
+    } catch (error) {
+      console.error('❌ Error in button click handler:', error)
+      alert('Transaction failed. Please try again.')
+    }
   }
 
   const handleAcceptedDoubleClick = (order: Order) => {
@@ -532,6 +598,31 @@ export default function AdminCenter() {
         onClose={handleCloseCancelModal}
         onConfirm={handleCancelOrder}
       />
+
+      {isTransacting && (
+        <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span>
+              {lastAction === 'verifying' && 'Verifying payment on blockchain...'}
+              {lastAction === 'completing_buy' && 'Transferring USDT to user...'}
+              {lastAction === 'completing_sell' && 'Completing sell order...'}
+            </span>
+          </div>
+          {hash && (
+            <div className="text-xs mt-1">
+              <a 
+                href={`https://bscscan.com/tx/${hash}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-200 hover:text-white"
+              >
+                View on BSCScan ↗
+              </a>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

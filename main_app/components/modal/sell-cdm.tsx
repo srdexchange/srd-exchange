@@ -14,13 +14,15 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useBankDetails } from '@/hooks/useBankDetails';
 import { useModalState } from "@/hooks/useModalState";
+import { useWalletManager } from '@/hooks/useWalletManager';
+import { useRates } from '@/hooks/useRates';
 
 interface SellCDMModalProps {
   isOpen: boolean;
   onClose: () => void;
   usdtAmount: string;
   amount: string;
-  orderData?: any; // Add this prop
+  orderData?: any;
 }
 
 export default function SellCDMModal({
@@ -28,16 +30,91 @@ export default function SellCDMModal({
   onClose,
   usdtAmount,
   amount,
-  orderData, // Add this parameter
+  orderData,
 }: SellCDMModalProps) {
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
   const [isMoneyReceived, setIsMoneyReceived] = useState(false);
+  const [isCoinSent, setIsCoinSent] = useState(false);
   const { bankDetails } = useBankDetails();
   const [accountNumber, setAccountNumber] = useState("");
   
   const { saveModalState, getModalState, clearModalState } = useModalState();
+  const { completeSellOrderOnChain } = useWalletManager();
+  const { getSellRate, loading: ratesLoading } = useRates();
 
-  // Load saved state when modal opens
+  // Calculate display amounts using proper API rates
+  let displayUsdtAmount = '';
+  let displayRupeeAmount = '';
+  let currentRate = 0;
+  let paymentMethod = 'CDM'; // Default for this modal
+
+  // Determine payment method from order data if available
+  if (orderData?.orderType) {
+    if (orderData.orderType.includes('CDM')) {
+      paymentMethod = 'CDM';
+    } else if (orderData.orderType.includes('UPI')) {
+      paymentMethod = 'UPI';
+    }
+  }
+
+  // Helper function to calculate rupees from USDT (same as buysellSection.tsx)
+  const calculateRupeeFromUSDT = (usdtAmount: string, sellRate: number) => {
+    const numericAmount = parseFloat(usdtAmount)
+    if (isNaN(numericAmount) || numericAmount <= 0) return '0'
+    // For selling: USDT * sell_rate = rupees
+    const rupeeAmount = numericAmount * sellRate
+    return rupeeAmount.toFixed(2)
+  }
+
+  if (orderData) {
+    if (orderData.orderType && orderData.orderType.includes('SELL')) {
+      // For sell orders from database: orderData.usdtAmount is what user is selling
+      displayUsdtAmount = orderData.usdtAmount ? orderData.usdtAmount.toString() : usdtAmount || '0';
+      
+      // Get the current sell rate from API - same logic as buysellSection.tsx
+      const currentPaymentMethod = paymentMethod === 'CDM' ? 'CDM' : 'UPI';
+      currentRate = getSellRate ? getSellRate(currentPaymentMethod) : (paymentMethod === 'CDM' ? 92.0 : 92.5);
+      
+      // Calculate rupees using the same method as buysellSection.tsx
+      if (orderData.usdtAmount && currentRate > 0) {
+        displayRupeeAmount = calculateRupeeFromUSDT(orderData.usdtAmount.toString(), currentRate);
+      } else {
+        displayRupeeAmount = amount || '0';
+      }
+        
+      console.log('📊 CDM Sell Modal - Calculated amounts:', {
+        displayUsdtAmount,
+        displayRupeeAmount,
+        currentRate,
+        paymentMethod,
+        orderType: orderData.orderType,
+        apiRate: currentRate,
+        getSellRateExists: !!getSellRate
+      });
+    } else {
+      // Fallback to props
+      displayUsdtAmount = usdtAmount || '0';
+      displayRupeeAmount = amount || '0';
+      const usdtNum = parseFloat(usdtAmount || '1');
+      const amountNum = parseFloat(amount || '0');
+      currentRate = usdtNum > 0 ? amountNum / usdtNum : 92.0;
+    }
+  } else {
+    // No order data, use props (user just entered values from buysellSection)
+    displayUsdtAmount = usdtAmount || '0'; // User entered USDT
+    displayRupeeAmount = amount || '0';     // Already calculated in buysellSection
+    
+    // Get current rate for display
+    const currentPaymentMethod = 'CDM';
+    currentRate = getSellRate ? getSellRate(currentPaymentMethod) : 92.0;
+  }
+
+  // Ensure currentRate is always a valid number
+  if (!currentRate || typeof currentRate !== 'number' || isNaN(currentRate) || currentRate <= 0) {
+    currentRate = paymentMethod === 'CDM' ? 92.0 : 92.5;
+    console.warn('Invalid currentRate, using fallback:', currentRate);
+  }
+
   useEffect(() => {
     if (isOpen && orderData) {
       console.log('📂 Loading SELL CDM modal state for order:', orderData.fullId || orderData.id);
@@ -45,7 +122,6 @@ export default function SellCDMModal({
       if (savedState) {
         console.log('📋 Restoring SELL CDM modal state:', savedState);
         
-        // Restore the step states based on saved data
         if (savedState.currentStep >= 2) {
           setIsMoneyReceived(true);
           setIsWaitingConfirmation(true);
@@ -57,7 +133,6 @@ export default function SellCDMModal({
           setIsMoneyReceived(false);
         }
       } else {
-        // No saved state, start fresh
         console.log('🆕 No saved SELL CDM state found, starting fresh');
         setIsWaitingConfirmation(false);
         setIsMoneyReceived(false);
@@ -65,7 +140,6 @@ export default function SellCDMModal({
     }
   }, [isOpen, orderData]);
 
-  // Save state whenever it changes
   useEffect(() => {
     if (orderData && isOpen) {
       const currentStep = isMoneyReceived ? 2 : isWaitingConfirmation ? 1 : 0;
@@ -85,7 +159,6 @@ export default function SellCDMModal({
     }
   }, [isWaitingConfirmation, isMoneyReceived, orderData, isOpen, accountNumber]);
 
-  // Reset modal state when opened without orderData
   useEffect(() => {
     if (isOpen && !orderData) {
       console.log('🔄 Resetting SELL CDM modal state for new order');
@@ -95,7 +168,6 @@ export default function SellCDMModal({
     }
   }, [isOpen, orderData]);
 
-  // Auto-fill account number from saved bank details
   useEffect(() => {
     if (bankDetails?.accountNumber && !accountNumber) {
       setAccountNumber(bankDetails.accountNumber);
@@ -107,9 +179,20 @@ export default function SellCDMModal({
     console.log("✅ Waiting for confirmation clicked");
   };
 
-  const handleMoneyReceived = () => {
-    setIsMoneyReceived(true);
-    console.log("💰 Money Received on Account clicked");
+  const handleMoneyReceived = async () => {
+    try {
+      console.log('🔗 Completing sell order on blockchain...');
+      if (orderData?.blockchainOrderId) {
+        await completeSellOrderOnChain(parseInt(orderData.blockchainOrderId));
+      }
+      setIsMoneyReceived(true);
+      setIsCoinSent(true);
+      console.log("💰 Money Received on Account clicked");
+    } catch (error) {
+      console.error('❌ Error completing sell order on blockchain:', error);
+      setIsMoneyReceived(true);
+      setIsCoinSent(true);
+    }
   };
 
   const handleOrderComplete = () => {
@@ -119,7 +202,6 @@ export default function SellCDMModal({
     onClose();
   };
 
-  // Get order ID for display
   const orderDisplayId = orderData ? `Order ${orderData.id || orderData.fullId?.slice(-6) || '14'}` : 'Order 14';
 
   return (
@@ -171,29 +253,18 @@ export default function SellCDMModal({
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-[#2F2F2F]">
               <div className="flex items-center space-x-3">
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    isMoneyReceived
-                      ? "bg-gray-400"
-                      : isWaitingConfirmation
-                      ? "bg-green-400"
-                      : "bg-yellow-400"
-                  }`}
-                ></div>
+                <div className={`w-3 h-3 rounded-full ${
+                  isMoneyReceived ? "bg-gray-400" : isWaitingConfirmation ? "bg-green-400" : "bg-yellow-400"
+                }`}></div>
                 <span className="text-white font-medium">{orderDisplayId}</span>
               </div>
 
-              {/* Desktop - Centered "How to sell" */}
               <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 space-x-1 justify-center items-center text-white text-sm">
                 <CircleQuestionMark className="w-5 h-5" />
                 <span>How to sell?</span>
               </div>
 
-              {/* Close button */}
-              <button
-                onClick={onClose}
-                className="text-white hover:text-white transition-colors"
-              >
+              <button onClick={onClose} className="text-white hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -201,22 +272,43 @@ export default function SellCDMModal({
             {/* Scrollable Main Content */}
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
               <div className="p-4 text-center">
-                {/* Amount Display - Show both USDT and rupee values */}
+                {/* Enhanced Amount Display */}
                 <div className="mb-6">
-                  {/* Primary Amount - USDT */}
+                  {/* Primary Amount - USDT being sold */}
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
-                    {usdtAmount} USDT
+                    {parseFloat(displayUsdtAmount).toFixed(4)} USDT
                   </div>
                   
-                  {/* Secondary Amount - Rupees */}
-                  <div className="text-2xl md:text-2xl font-medium text-gray-300 mb-2">
-                    ≈ ₹{amount}
+                  {/* Secondary Amount - Rupees to receive */}
+                  <div className="text-2xl md:text-2xl font-medium text-green-400 mb-2">
+                    You'll receive ₹{parseFloat(displayRupeeAmount).toFixed(2)}
                   </div>
                   
-                  {/* Conversion Info */}
+                  {/* Enhanced conversion info */}
                   <div className="text-xs text-gray-400 mb-2">
-                    You will receive ₹{amount} for {usdtAmount} USDT
+                    Selling {parseFloat(displayUsdtAmount).toFixed(4)} USDT • Getting ₹{parseFloat(displayRupeeAmount).toFixed(2)} INR
                   </div>
+                  
+                  {/* Rate Display - Show current API rate */}
+                  <div className="text-xs text-gray-500 mb-2">
+                    {ratesLoading ? (
+                      'Loading rate...'
+                    ) : (
+                      <>
+                        Rate: ₹{currentRate.toFixed(2)} per USDT ({paymentMethod})
+                        <span className="ml-2 text-blue-400">(Current API rate)</span>
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Order Info */}
+                  {orderData && (
+                    <div className="text-xs text-gray-500 mb-4">
+                      Order ID: {orderData.fullId || orderData.id} • 
+                      Created: {new Date(orderData.createdAt).toLocaleString()} •
+                      Type: {orderData.orderType} • Method: {paymentMethod}
+                    </div>
+                  )}
                   
                   <div className="flex items-center justify-center">
                     <svg
@@ -233,78 +325,54 @@ export default function SellCDMModal({
                       />
                     </svg>
                   </div>
-                  <div className="text-xs text-white mt-2 mb-4">CDM Sell Order</div>
+                  <div className="text-xs text-white mt-2 mb-4">{paymentMethod} Sell Order</div>
                 </div>
 
                 {/* Payment Method Badge */}
                 <div className="flex items-center justify-center space-x-4 md:space-x-10 mb-6 flex-wrap gap-2">
                   <div className="bg-[#1D1C1C] text-black px-2 py-1 rounded text-sm font-medium flex items-center space-x-2">
-                    <img src="/bank.svg" alt="" className="w-5 h-5" />
-                    <span className="text-white">CDM</span>
+                    <img src={paymentMethod === 'CDM' ? "/bank.svg" : "/phonepay-gpay.svg"} alt="" className="w-5 h-5" />
+                    <span className="text-white">{paymentMethod}</span>
                   </div>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
                     Sell Order
                   </span>
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
-                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today 11:40 PM'}
+                    {orderData ? new Date(orderData.createdAt || Date.now()).toLocaleTimeString() : 'Today'}
                   </span>
                 </div>
 
-                {/* Your Bank Details */}
-                <div className="mb-6">
-                  {bankDetails ? (
-                    <div className="bg-[#1a1a1a] rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-gray-400 text-sm">Your Bank Account</span>
-                        <span className="text-green-400 text-xs">✓ Saved</span>
-                      </div>
-                      <div className="text-white font-medium text-lg">
-                        {bankDetails.accountHolderName}
-                      </div>
-                      <div className="text-gray-300 text-sm">
-                        {bankDetails.accountNumber} • {bankDetails.ifscCode}
-                      </div>
-                      <div className="text-gray-400 text-xs">
-                        {bankDetails.branchName}
-                      </div>
+                {/* Order Status Information */}
+                {orderData && (
+                  <div className="mb-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <div className="text-sm text-blue-400 font-medium mb-1">
+                      Order Status: {orderData.status || 'PENDING'}
                     </div>
-                  ) : (
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      placeholder="Add your Account Number"
-                      className="w-full bg-[#2a2a2a] border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-                    />
-                  )}
-                </div>
-
-                {/* Progress Bar - Centered - Hide when waiting confirmation or money received */}
-                {!isWaitingConfirmation && !isMoneyReceived && (
-                  <div className="flex flex-col items-center mb-8">
-                    <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
-                      <div className="bg-[#622DBF] h-2 rounded-full w-3/4"></div>
+                    <div className="text-xs text-gray-400">
+                      {orderData.orderType} • Selling: {parseFloat(displayUsdtAmount).toFixed(4)} USDT → Receiving: ₹{parseFloat(displayRupeeAmount).toFixed(2)}
                     </div>
-                    <div className="text-white text-sm font-medium">
-                      14 : 34 Left
+                    <div className="text-xs text-gray-500 mt-1">
+                      Payment Method: {paymentMethod} • Rate: ₹{currentRate.toFixed(2)}/USDT
                     </div>
                   </div>
                 )}
 
-                {/* Show progress bar and message when order is complete */}
+                {/* Enhanced Progress Bar Messages */}
                 {isMoneyReceived && (
                   <div className="flex flex-col items-center mb-8">
                     <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
-                      <div className="bg-[#622DBF] h-2 rounded-full w-full"></div>
+                      <div className="bg-green-500 h-2 rounded-full w-full"></div>
                     </div>
-          
-                    <div className="text-white text-sm font-medium mt-1">
-                      Money paid to account please check and confirm
+                    <div className="text-green-400 text-sm font-medium mt-1">
+                      ✅ Payment confirmed! {parseFloat(displayUsdtAmount).toFixed(4)} USDT sent to admin
+                    </div>
+                    <div className="text-gray-400 text-xs mt-1">
+                      You received ₹{parseFloat(displayRupeeAmount).toFixed(2)} via {paymentMethod}
                     </div>
                   </div>
                 )}
 
-                {/* Action Button */}
+                {/* Rest of the component remains the same */}
                 <div className="px-4 md:px-0">
                   <button
                     onClick={

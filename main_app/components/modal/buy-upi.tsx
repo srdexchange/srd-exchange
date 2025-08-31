@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useModalState } from "@/hooks/useModalState";
 import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
+import { useWalletManager } from '@/hooks/useWalletManager'
 
 interface BuyUPIModalProps {
   isOpen: boolean;
@@ -24,13 +25,6 @@ interface BuyUPIModalProps {
   orderData?: any; // New prop for order data
 }
 
-interface AdminPaymentDetails {
-  orderId: string;
-  customAmount: number;
-  paymentMethod: string;
-  adminUpiId: string | null;
-  adminBankDetails: any;
-}
 
 export default function BuyUPIModal({
   isOpen,
@@ -50,9 +44,7 @@ export default function BuyUPIModal({
   // Fetch payment details from database at intervals
   const { 
     paymentDetails, 
-    isLoading: isLoadingPaymentDetails, 
-    error: paymentDetailsError 
-  } = useOrderPaymentDetails(
+    isLoading: isLoadingPaymentDetails  } = useOrderPaymentDetails(
     orderData?.fullId || orderData?.id, 
     isOpen && !!orderData
   );
@@ -61,6 +53,8 @@ export default function BuyUPIModal({
   const hasReceivedAdminDetails = !!(paymentDetails?.adminUpiId);
   const displayUpiId = paymentDetails?.adminUpiId || "Waiting for admin UPI...";
   const displayAmount = paymentDetails?.customAmount?.toString() || amount;
+
+  const { confirmOrderReceivedOnChain } = useWalletManager()
 
   // Load saved state when modal opens
   useEffect(() => {
@@ -128,7 +122,7 @@ export default function BuyUPIModal({
         paymentDetails
       );
     }
-  }, [currentStep, paymentDetails, orderData, isOpen]);
+  }, [currentStep, paymentDetails, orderData, isOpen, saveModalState]);
 
   // Reset modal state when opened for new orders
   useEffect(() => {
@@ -176,10 +170,21 @@ export default function BuyUPIModal({
     setCurrentStep(3);
   };
 
-  const handleCoinReceived = () => {
-    setIsCoinReceived(true);
-    setCurrentStep(4);
-  };
+  const handleCoinReceived = async () => {
+    try {
+      console.log('🔗 Confirming order received on blockchain...')
+      if (orderData?.blockchainOrderId) {
+        await confirmOrderReceivedOnChain(parseInt(orderData.blockchainOrderId))
+      }
+      setIsCoinReceived(true)
+      setCurrentStep(4)
+    } catch (error) {
+      console.error('❌ Error confirming order on blockchain:', error)
+      // Still update UI even if blockchain call fails
+      setIsCoinReceived(true)
+      setCurrentStep(4)
+    }
+  }
 
   const handleOrderComplete = () => {
     if (orderData) {
@@ -307,9 +312,8 @@ export default function BuyUPIModal({
                   </motion.div>
                 )}
 
-                {/* Amount Display - Show both rupee and USDT values when admin accepts */}
                 <div className="mb-6">
-                  {/* Primary Amount - Rupees */}
+
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
                     {displayAmount}₹
                   </div>

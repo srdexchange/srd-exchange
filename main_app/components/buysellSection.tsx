@@ -15,6 +15,11 @@ import BankDetailsModal, { BankDetailsData } from './modal/bank-details-modal'
 import { useBankDetails } from '@/hooks/useBankDetails'
 
 export default function BuySellSection() {
+
+  const UPI_LIMIT_USDT = 100; 
+  const CDM_MIN_USDT = 100;    
+  const CDM_MAX_USDT = 500; 
+
   const [activeTab, setActiveTab] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [amount, setAmount] = useState('')
@@ -119,14 +124,15 @@ export default function BuySellSection() {
         finalUsdtAmount = calculateUSDT(orderAmount) // converted USDT
       } else {
         // For sell orders: user enters USDT, we calculate rupees
-        finalUsdtAmount = orderAmount // USDT amount
+        finalUsdtAmount = orderAmount // USDT amount (what user entered)
         finalOrderAmount = calculateRupee(orderAmount) // converted rupees
       }
       
       console.log('🚀 Creating order with conversions:', {
         orderType,
-        rupeeAmount: finalOrderAmount,
-        usdtAmount: finalUsdtAmount,
+        userEnteredAmount: orderAmount,
+        finalOrderAmount, // Always rupees for database
+        finalUsdtAmount,  // Always USDT amount
         rate,
         buyPrice,
         sellPrice
@@ -140,8 +146,8 @@ export default function BuySellSection() {
         body: JSON.stringify({
           walletAddress: address,
           orderType: orderType,
-          amount: finalOrderAmount, // Always rupees for database
-          usdtAmount: finalUsdtAmount, // Always USDT amount
+          amount: finalOrderAmount, // Rupees for database
+          usdtAmount: finalUsdtAmount, // USDT amount for database
           buyRate: orderType.includes('BUY') ? rate : null,
           sellRate: orderType.includes('SELL') ? rate : null,
           paymentMethod: paymentMethod.toUpperCase()
@@ -163,6 +169,50 @@ export default function BuySellSection() {
     }
   }
 
+  // Add validation functions
+  const validateUSDTLimits = (usdtAmount: number, paymentMethod: string): { isValid: boolean; error: string } => {
+    if (paymentMethod === 'upi') {
+      if (usdtAmount > UPI_LIMIT_USDT) {
+        return { 
+          isValid: false, 
+          error: `UPI orders are limited to ${UPI_LIMIT_USDT} USDT maximum. Current: ${usdtAmount.toFixed(4)} USDT` 
+        };
+      }
+    } else if (paymentMethod === 'cdm') {
+      if (usdtAmount < CDM_MIN_USDT) {
+        return { 
+          isValid: false, 
+          error: `CDM orders require minimum ${CDM_MIN_USDT} USDT. Current: ${usdtAmount.toFixed(4)} USDT` 
+        };
+      }
+      if (usdtAmount > CDM_MAX_USDT) {
+        return { 
+          isValid: false, 
+          error: `CDM orders are limited to ${CDM_MAX_USDT} USDT maximum. Current: ${usdtAmount.toFixed(4)} USDT` 
+        };
+      }
+    }
+    return { isValid: true, error: '' };
+  };
+
+  const getRupeeLimitsForPaymentMethod = (paymentMethod: string): { min: number; max: number } => {
+    const currentRate = activeTab === 'buy' ? buyPrice : sellPrice;
+    
+    if (paymentMethod === 'upi') {
+      return {
+        min: 0,
+        max: UPI_LIMIT_USDT * currentRate
+      };
+    } else if (paymentMethod === 'cdm') {
+      return {
+        min: CDM_MIN_USDT * currentRate,
+        max: CDM_MAX_USDT * currentRate
+      };
+    }
+    return { min: 0, max: Infinity };
+  };
+
+  // Update the handleBuySellClick function to include validation
   const handleBuySellClick = async () => {
     if (!isConnected || !amount || parseFloat(amount) <= 0) return
 
@@ -173,6 +223,23 @@ export default function BuySellSection() {
       walletAddress: address 
     });
 
+    // Calculate USDT amount for validation
+    let usdtAmountForValidation: number;
+    if (activeTab === 'buy') {
+      // For buy orders: user enters rupees, calculate USDT
+      usdtAmountForValidation = parseFloat(calculateUSDT(amount));
+    } else {
+      // For sell orders: user enters USDT directly
+      usdtAmountForValidation = parseFloat(amount);
+    }
+
+    // Validate USDT limits
+    const validation = validateUSDTLimits(usdtAmountForValidation, paymentMethod);
+    if (!validation.isValid) {
+      alert(validation.error);
+      return;
+    }
+
     // Check if this is a CDM order and user doesn't have bank details
     if (paymentMethod === 'cdm' && !bankDetails) {
       console.log('📋 CDM order requires bank details - opening modal');
@@ -182,6 +249,56 @@ export default function BuySellSection() {
 
     await proceedWithOrderCreation()
   }
+
+  // Update the amount input validation (add real-time feedback)
+  const getAmountValidationStatus = (): { isValid: boolean; error: string; warning: string } => {
+    if (!amount || !paymentMethod) return { isValid: true, error: '', warning: '' };
+
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) return { isValid: true, error: '', warning: '' };
+
+    let usdtAmountForValidation: number;
+    if (activeTab === 'buy') {
+      usdtAmountForValidation = parseFloat(calculateUSDT(amount));
+    } else {
+      usdtAmountForValidation = numericAmount;
+    }
+
+    const validation = validateUSDTLimits(usdtAmountForValidation, paymentMethod);
+    
+    if (!validation.isValid) {
+      return { isValid: false, error: validation.error, warning: '' };
+    }
+
+    // Add warning when approaching limits
+    if (paymentMethod === 'upi' && usdtAmountForValidation > UPI_LIMIT_USDT * 0.9) {
+      return { 
+        isValid: true, 
+        error: '', 
+        warning: `Approaching UPI limit of ${UPI_LIMIT_USDT} USDT` 
+      };
+    }
+
+    if (paymentMethod === 'cdm' && usdtAmountForValidation > CDM_MAX_USDT * 0.9) {
+      return { 
+        isValid: true, 
+        error: '', 
+        warning: `Approaching CDM limit of ${CDM_MAX_USDT} USDT` 
+      };
+    }
+
+    return { isValid: true, error: '', warning: '' };
+  };
+
+  const amountValidation = getAmountValidationStatus();
+
+  // Update the button disabled condition to include validation
+  const isButtonDisabled = !isConnected || 
+                          isPlacingOrder || 
+                          !amount || 
+                          parseFloat(amount) <= 0 || 
+                          bankDetailsLoading || 
+                          !amountValidation.isValid;
 
   const proceedWithOrderCreation = async () => {
     setIsPlacingOrder(true)
@@ -652,6 +769,44 @@ export default function BuySellSection() {
                       : `Rate: 1 USDT = ₹${sellPrice}`
                     }
                   </div>
+                  
+                  {/* Add limit information */}
+                  <div className="text-xs text-gray-500 mt-2">
+                    {paymentMethod === 'upi' && (
+                      <>Limit: Max {UPI_LIMIT_USDT} USDT (₹{(UPI_LIMIT_USDT * (activeTab === 'buy' ? buyPrice : sellPrice)).toFixed(0)})</>
+                    )}
+                    {paymentMethod === 'cdm' && (
+                      <>
+                        Limits: {CDM_MIN_USDT}-{CDM_MAX_USDT} USDT 
+                        (₹{(CDM_MIN_USDT * (activeTab === 'buy' ? buyPrice : sellPrice)).toFixed(0)} - 
+                        ₹{(CDM_MAX_USDT * (activeTab === 'buy' ? buyPrice : sellPrice)).toFixed(0)})
+                      </>
+                    )}
+                  </div>
+
+                  {/* Show validation error */}
+                  {amountValidation.error && (
+                    <motion.div 
+                      className="text-xs text-red-400 mt-2 px-2 py-1 bg-red-500/10 rounded border border-red-500/20"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {amountValidation.error}
+                    </motion.div>
+                  )}
+
+                  {/* Show validation warning */}
+                  {amountValidation.warning && (
+                    <motion.div 
+                      className="text-xs text-yellow-400 mt-2 px-2 py-1 bg-yellow-500/10 rounded border border-yellow-500/20"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {amountValidation.warning}
+                    </motion.div>
+                  )}
                 </motion.div>
               </motion.div>
             )}
@@ -662,19 +817,21 @@ export default function BuySellSection() {
             {activeTab && paymentMethod && (
               <motion.button 
                 onClick={handleBuySellClick}
-                disabled={!isConnected || isPlacingOrder || !amount || parseFloat(amount) <= 0 || bankDetailsLoading}
+                disabled={isButtonDisabled}
                 className="w-full bg-[#622DBF] hover:bg-purple-700 text-white py-4 sm:py-5 px-6 rounded-xl font-bold text-lg sm:text-xl transition-all shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 disabled:opacity-50 disabled:cursor-not-allowed"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                whileHover={{ scale: (!isConnected || isPlacingOrder || bankDetailsLoading) ? 1 : 1.02 }}
-                whileTap={{ scale: (!isConnected || isPlacingOrder || bankDetailsLoading) ? 1 : 0.98 }}
+                whileHover={{ scale: isButtonDisabled ? 1 : 1.02 }}
+                whileTap={{ scale: isButtonDisabled ? 1 : 0.98 }}
                 transition={{ duration: 0.3 }}
               >
                 {!isConnected 
                   ? 'Connect Wallet to Trade'
                   : bankDetailsLoading
                   ? 'Loading Bank Details...'
+                  : amountValidation.error
+                  ? 'Amount Exceeds Limits'
                   : isPlacingOrder
                   ? `Placing ${activeTab === 'buy' ? 'Buy' : 'Sell'} Order...`
                   : paymentMethod === 'cdm' && !bankDetails
@@ -739,16 +896,16 @@ export default function BuySellSection() {
       <SellUPIModal 
         isOpen={showSellUPIModal}
         onClose={handleCloseSellUPI}
-        usdtAmount={amount}
-        amount={rupeeAmount}
+        usdtAmount={amount} // User entered USDT amount
+        amount={calculateRupee(amount)} // Calculated rupee amount
         orderData={currentOrder}
       />
 
       <SellCDMModal 
         isOpen={showSellCDMModal}
         onClose={handleCloseSellCDM}
-        usdtAmount={amount}
-        amount={rupeeAmount}
+        usdtAmount={amount} // User entered USDT amount  
+        amount={calculateRupee(amount)} // Calculated rupee amount
         orderData={currentOrder}
       />
 

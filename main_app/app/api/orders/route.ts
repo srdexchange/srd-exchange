@@ -21,7 +21,17 @@ export async function GET(request: NextRequest) {
       where: { walletAddress: walletAddress.toLowerCase() },
       include: {
         orders: {
-          orderBy: { createdAt: 'desc' }
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: {
+              select: {
+                id: true,
+                walletAddress: true,
+                upiId: true,
+                bankDetails: true
+              }
+            }
+          }
         }
       }
     })

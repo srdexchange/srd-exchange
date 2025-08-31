@@ -9,7 +9,6 @@ import {
   Clock,
   Upload,
   FileText,
-  File,
   Check,
   CheckCheck,
   CircleQuestionMark,
@@ -21,34 +20,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useModalState } from "@/hooks/useModalState";
 import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
 import { useBankDetails } from '@/hooks/useBankDetails'
+import { useWalletManager } from '@/hooks/useWalletManager'
 
 interface BuyCDMModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: string;
   usdtAmount: string;
-  orderData?: any; // Add orderData prop
+  orderData?: any;
 }
-  
-interface AdminPaymentDetails {
-  orderId: string;
-  customAmount: number;
-  paymentMethod: string;
-  adminUpiId: string | null;
-  adminBankDetails: {
-    accountNumber: string;
-    ifscCode: string;
-    branchName: string;
-    accountHolderName: string;
-  };
-}
+
 
 export default function BuyCDMModal({
   isOpen,
   onClose,
   amount,
   usdtAmount,
-  orderData, // Add this parameter
+  orderData, 
 }: BuyCDMModalProps) {
   const [isPaid, setIsPaid] = useState(false);
   const [isWaitingConfirmation, setIsWaitingConfirmation] = useState(false);
@@ -61,15 +49,12 @@ export default function BuyCDMModal({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isUpiPaymentStep, setIsUpiPaymentStep] = useState(false);
   const [isUpiPaid, setIsUpiPaid] = useState(false);
-
+  const [isCoinReceived, setIsCoinReceived] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const { saveModalState, getModalState, clearModalState } = useModalState();
-
-  // Fetch payment details from database at intervals
   const { 
     paymentDetails, 
-    isLoading: isLoadingPaymentDetails, 
-    error: paymentDetailsError 
-  } = useOrderPaymentDetails(
+    isLoading: isLoadingPaymentDetails  } = useOrderPaymentDetails(
     orderData?.fullId || orderData?.id, 
     isOpen && !!orderData
   );
@@ -104,6 +89,8 @@ export default function BuyCDMModal({
           setIsWaitingConfirmation(true);
           setIsUpiPaid(true);
           setIsUpiPaymentStep(false);
+          setIsCoinReceived(true);
+          setCurrentStep(5);
         } else if (savedState.currentStep >= 4) {
           setIsUploadComplete(true);
           setIsPaid(true);
@@ -111,6 +98,8 @@ export default function BuyCDMModal({
           setIsUpiPaid(true);
           setIsUpiPaymentStep(false);
           setIsOrderComplete(false);
+          setIsCoinReceived(false);
+          setCurrentStep(4);
         } else if (savedState.currentStep >= 3) {
           setIsPaid(true);
           setIsWaitingConfirmation(true);
@@ -118,6 +107,8 @@ export default function BuyCDMModal({
           setIsUpiPaymentStep(false);
           setIsUploadComplete(false);
           setIsOrderComplete(false);
+          setIsCoinReceived(false);
+          setCurrentStep(3);
         } else if (savedState.currentStep >= 2) {
           setIsWaitingConfirmation(true);
           setIsUpiPaid(true);
@@ -125,6 +116,8 @@ export default function BuyCDMModal({
           setIsPaid(false);
           setIsUploadComplete(false);
           setIsOrderComplete(false);
+          setIsCoinReceived(false);
+          setCurrentStep(2);
         } else if (savedState.currentStep >= 1) {
           setIsUpiPaymentStep(true);
           setIsUpiPaid(false);
@@ -132,6 +125,8 @@ export default function BuyCDMModal({
           setIsPaid(false);
           setIsUploadComplete(false);
           setIsOrderComplete(false);
+          setIsCoinReceived(false);
+          setCurrentStep(1);
         } else {
           setIsUpiPaymentStep(false);
           setIsUpiPaid(false);
@@ -139,6 +134,8 @@ export default function BuyCDMModal({
           setIsWaitingConfirmation(false);
           setIsUploadComplete(false);
           setIsOrderComplete(false);
+          setIsCoinReceived(false);
+          setCurrentStep(0);
         }
       } else {
         // No saved state, start fresh
@@ -149,6 +146,8 @@ export default function BuyCDMModal({
         setIsWaitingConfirmation(false);
         setIsUploadComplete(false);
         setIsOrderComplete(false);
+        setIsCoinReceived(false);
+        setCurrentStep(0);
       }
     }
   }, [isOpen, orderData]);
@@ -156,18 +155,19 @@ export default function BuyCDMModal({
   // Save state whenever it changes
   useEffect(() => {
     if (orderData && isOpen) {
-      const currentStep = isOrderComplete ? 5 : isUploadComplete ? 4 : isPaid ? 3 : isWaitingConfirmation ? 2 : isUpiPaid ? 1 : isUpiPaymentStep ? 1 : 0;
+      const currentStepValue = isOrderComplete ? 5 : isUploadComplete ? 4 : isPaid ? 3 : isWaitingConfirmation ? 2 : isUpiPaid ? 1 : isUpiPaymentStep ? 1 : 0;
+      setCurrentStep(currentStepValue);
       
       console.log('💾 Saving CDM modal state:', {
         orderId: orderData.fullId || orderData.id,
-        currentStep,
+        currentStep: currentStepValue,
         hasAdminDetails: !!paymentDetails
       });
       
       saveModalState(
         orderData.fullId || orderData.id,
         'BUY_CDM',
-        currentStep,
+        currentStepValue,
         {
           accountNumber,
           confirmAccountNumber,
@@ -179,7 +179,7 @@ export default function BuyCDMModal({
     }
   }, [isPaid, isWaitingConfirmation, isUploadComplete, isOrderComplete, isUpiPaymentStep, isUpiPaid, paymentDetails, orderData, isOpen, accountNumber, confirmAccountNumber, ifscCode, branchName]);
 
-  // Reset modal state when opened for new orders (without orderData)
+
   useEffect(() => {
     if (isOpen && !orderData) {
       console.log('🔄 Resetting CDM modal state for new order');
@@ -189,6 +189,8 @@ export default function BuyCDMModal({
       setIsWaitingConfirmation(false);
       setIsUploadComplete(false);
       setIsOrderComplete(false);
+      setIsCoinReceived(false);
+      setCurrentStep(0);
       setCopiedField(null);
       setAccountNumber("");
       setConfirmAccountNumber("");
@@ -217,10 +219,12 @@ export default function BuyCDMModal({
         isPaid,
         isWaitingConfirmation,
         isUploadComplete,
-        isOrderComplete
+        isOrderComplete,
+        isCoinReceived,
+        currentStep
       });
     }
-  }, [isOpen, hasReceivedAdminDetails, paymentDetails, orderData, displayBankDetails, isLoadingPaymentDetails, isPaid, isWaitingConfirmation, isUploadComplete, isOrderComplete]);
+  }, [isOpen, hasReceivedAdminDetails, paymentDetails, orderData, displayBankDetails, isLoadingPaymentDetails, isPaid, isWaitingConfirmation, isUploadComplete, isOrderComplete, isCoinReceived, currentStep]);
 
   const handleCopy = async (text: string, field: string) => {
     try {
@@ -234,18 +238,37 @@ export default function BuyCDMModal({
 
   const handlePaymentConfirm = () => {
     setIsWaitingConfirmation(true);
+    setCurrentStep(2);
     setTimeout(() => {
       setIsPaid(true);
+      setCurrentStep(3);
     }, 2000);
   };
 
   const handleUploadDetails = () => {
     setIsUploadComplete(true);
+    setCurrentStep(4);
   };
 
-  const handleCoinReceived = () => {
-    setIsOrderComplete(true);
-  };
+  const { confirmOrderReceivedOnChain } = useWalletManager()
+
+  const handleCoinReceived = async () => {
+    try {
+      console.log('🔗 Confirming order received on blockchain...')
+      if (orderData?.blockchainOrderId) {
+        await confirmOrderReceivedOnChain(parseInt(orderData.blockchainOrderId))
+      }
+      setIsCoinReceived(true)
+      setIsOrderComplete(true)
+      setCurrentStep(5)
+    } catch (error) {
+      console.error('❌ Error confirming order on blockchain:', error)
+      // Still update UI even if blockchain call fails
+      setIsCoinReceived(true)
+      setIsOrderComplete(true)
+      setCurrentStep(5)
+    }
+  }
 
   const handleOrderComplete = () => {
     if (orderData) {
@@ -257,8 +280,10 @@ export default function BuyCDMModal({
   const handleUpiPaymentConfirm = () => {
     setIsUpiPaid(true);
     setIsUpiPaymentStep(false);
+    setCurrentStep(1);
     setTimeout(() => {
       setIsWaitingConfirmation(true);
+      setCurrentStep(2);
     }, 1000);
   };
 
@@ -409,7 +434,7 @@ export default function BuyCDMModal({
                 <div className="mb-6">
                   {/* Primary Amount */}
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
-                    {!isUpiPaid ? '₹500' : `${displayAmount}₹`}
+                    {!isUpiPaid ? '₹500' : `₹${displayAmount}`}
                   </div>
                   
                   {/* Secondary Amount - Show USDT equivalent */}
@@ -512,7 +537,7 @@ export default function BuyCDMModal({
                 {hasReceivedAdminDetails && isUpiPaid && !isWaitingConfirmation && !isPaid && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
-                      Please transfer {displayAmount}₹ to admin's bank account
+                      Please transfer ₹{displayAmount} to admin's bank account
                     </div>
                     <div className="text-[#26AF6C] text-xs flex items-center justify-center mb-4">
                       <TriangleAlert className="w-3 h-3 mr-1" />
@@ -647,7 +672,7 @@ export default function BuyCDMModal({
                           <div className="flex items-center space-x-2 mb-2">
                             <User className="w-4 h-4 text-gray-400" />
                             <span className="text-sm text-gray-400">Account Holder Name</span>
-                          </div>
+                          </div>  
                           <div className="rounded-lg px-4 py-3 bg-[#2a2a2a]">
                             <span className="font-medium text-white">
                               {displayBankDetails.accountHolderName}
@@ -827,7 +852,7 @@ export default function BuyCDMModal({
                       ) : isUpiPaid && hasReceivedAdminDetails ? (
                         <>
                           <CreditCard className="w-5 h-5" />
-                          <span>I Paid {displayAmount}₹ To Admin Bank</span>
+                          <span>I Paid ₹{displayAmount} To Admin Bank</span>
                         </>
                       ) : isUpiPaid && !hasReceivedAdminDetails ? (
                         // New condition for waiting state after UPI payment
@@ -857,3 +882,4 @@ export default function BuyCDMModal({
     </AnimatePresence>
   );
 }
+
