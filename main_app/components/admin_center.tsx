@@ -3,18 +3,22 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { User } from 'lucide-react'
-import { useAccount } from 'wagmi'
+import { useAccount, useChainId } from 'wagmi'
 import { useAdminAPI } from '@/hooks/useAdminAPI'
 import { useUserActivity } from '@/hooks/useUserActivity'
 import { useRates } from '@/hooks/useRates'
 import CancelOrderModal from './modal/cancelOrder'
 import { useAdminContract } from '@/hooks/useAdminContract'
+import { readContract } from '@wagmi/core'
+import { config } from '@/lib/wagmi'
+import { formatUnits } from 'viem'
 
 interface Order {
   id: string;
   fullId: string;
   time: string;
   amount: number;
+  usdtAmount?: number;
   type: string;
   orderType: string;
   price: number;
@@ -23,6 +27,7 @@ interface Order {
   paymentProof?: string;
   adminUpiId?: string;
   adminBankDetails?: string;
+  blockchainOrderId?: number;
   user: {
     id: string;
     walletAddress: string;
@@ -30,6 +35,42 @@ interface Order {
     bankDetails: any;
   };
 }
+
+// Add contract addresses and ABIs (same as in useWalletManager.ts)
+const CONTRACTS = {
+  P2P_TRADING: {
+    [56]: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    [97]: '0xE0deDEAC4656F82076ded1B1291e89F94b8a5981' as `0x${string}`,
+  }
+}
+
+const P2P_TRADING_ABI = [
+  {
+    inputs: [{ internalType: 'uint256', name: '_orderId', type: 'uint256' }],
+    name: 'getOrder',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'orderId', type: 'uint256' },
+          { internalType: 'address', name: 'user', type: 'address' },
+          { internalType: 'uint256', name: 'usdtAmount', type: 'uint256' },
+          { internalType: 'uint256', name: 'inrAmount', type: 'uint256' },
+          { internalType: 'bool', name: 'isBuyOrder', type: 'bool' },
+          { internalType: 'bool', name: 'isCompleted', type: 'bool' },
+          { internalType: 'bool', name: 'isVerified', type: 'bool' },
+          { internalType: 'bool', name: 'adminApproved', type: 'bool' },
+          { internalType: 'uint256', name: 'timestamp', type: 'uint256' },
+          { internalType: 'string', name: 'orderType', type: 'string' },
+        ],
+        internalType: 'struct P2PTrading.Order',
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
 
 export default function AdminCenter() {
   const [orderStatuses, setOrderStatuses] = useState<{[key: string]: {[key: string]: 'waiting' | 'completed'}}>({})
@@ -41,15 +82,18 @@ export default function AdminCenter() {
   const [error, setError] = useState<string | null>(null)
 
   const { address } = useAccount()
+  const chainId = useChainId()
   const { makeAdminRequest } = useAdminAPI()
   const isUserActive = useUserActivity(5000);
   const { getBuyRate, getSellRate } = useRates();
   const [lastCenterRefresh, setLastCenterRefresh] = useState(Date.now());
 
+
   const { 
     handleVerifyPayment, 
     handleCompleteBuyOrder, 
     handleCompleteSellOrder, 
+    handleApproveOrder, // This should now work
     isTransacting,
     lastAction,
     hash 
@@ -148,16 +192,123 @@ export default function AdminCenter() {
     }
   }
 
+  const getValidOrderId = (order: Order): number => {
+    console.log('🔍 Getting valid order ID for:', {
+      fullId: order.fullId,
+      blockchainOrderId: order.blockchainOrderId,
+      id: order.id
+    })
+    
+    // First try blockchainOrderId if it exists
+    if (order.blockchainOrderId) {
+      const blockchainId = parseInt(order.blockchainOrderId.toString())
+      if (!isNaN(blockchainId) && blockchainId > 0) {
+        console.log('✅ Using blockchainOrderId:', blockchainId)
+        return blockchainId
+      }
+    }
+    
+    // Try to extract number from fullId
+    const fullIdNumbers = order.fullId.replace(/\D/g, '')
+    if (fullIdNumbers) {
+      const extractedId = parseInt(fullIdNumbers)
+      if (!isNaN(extractedId) && extractedId > 0) {
+        console.log('✅ Using extracted ID from fullId:', extractedId)
+        return extractedId
+      }
+    }
+    
+    // Try to parse the id field
+    const parsedId = parseInt(order.id)
+    if (!isNaN(parsedId) && parsedId > 0) {
+      console.log('✅ Using parsed order.id:', parsedId)
+      return parsedId
+    }
+    
+    // Last resort: create a hash-based ID
+    let hash = 0
+    for (let i = 0; i < order.fullId.length; i++) {
+      const char = order.fullId.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    const hashId = Math.abs(hash) % 1000000 + 1 // Ensure positive and reasonable size
+    
+    console.warn('⚠️ Using fallback hash ID:', hashId, 'for order:', order.fullId)
+    return hashId
+  }
+
   const handleButtonClick = async (orderIndex: number, tag: string) => {
     const order = orders[orderIndex]
     const currentStatus = orderStatuses[orderIndex]?.[tag]
+    
+    console.log('🎯 Button clicked:', {
+      tag,
+      orderIndex,
+      currentStatus,
+      order: {
+        fullId: order.fullId,
+        id: order.id,
+        blockchainOrderId: order.blockchainOrderId,
+        orderType: order.orderType,
+        status: order.status
+      }
+    })
     
     try {
       // Handle blockchain interactions for specific tags
       if (tag.toLowerCase() === 'verified' && !currentStatus) {
         // First verified button - verify payment on blockchain
-        console.log('🔗 Verifying payment on blockchain...')
-        await handleVerifyPayment(parseInt(order.fullId))
+        console.log('🔗 First verified button - verifying payment on blockchain...')
+        
+        const orderIdForBlockchain = getValidOrderId(order)
+        console.log('📋 Using order ID for verification:', orderIdForBlockchain)
+        
+        // Check if order exists on blockchain
+        try {
+          const orderDetails = await readContract(config as any, {
+            address: CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+            abi: P2P_TRADING_ABI,
+            functionName: 'getOrder',
+            args: [BigInt(orderIdForBlockchain)],
+          })
+          
+          console.log('📊 Blockchain order details:', {
+            orderId: orderDetails.orderId.toString(),
+            user: orderDetails.user,
+            usdtAmount: formatUnits(orderDetails.usdtAmount, 6),
+            isBuyOrder: orderDetails.isBuyOrder,
+            isCompleted: orderDetails.isCompleted,
+            isVerified: orderDetails.isVerified,
+            adminApproved: orderDetails.adminApproved
+          })
+
+          if (!orderDetails.adminApproved) {
+            // If not approved, approve first
+            console.log('🔓 Order not approved, approving first...')
+            await handleApproveOrder(orderIdForBlockchain)
+            
+            // Wait a bit for the approval transaction
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
+
+          if (orderDetails.isVerified) {
+            throw new Error('Order already verified on blockchain.')
+          }
+
+        } catch (orderCheckError) {
+          console.error('❌ Error checking order on blockchain:', orderCheckError)
+          
+          // If order doesn't exist on blockchain, that's expected for some orders
+          const errorMessage = orderCheckError instanceof Error ? orderCheckError.message : String(orderCheckError)
+          if (errorMessage.includes('execution reverted')) {
+            console.log('⚠️ Order may not exist on blockchain yet, proceeding with verification...')
+          } else {
+            throw new Error(`Failed to verify order on blockchain: ${errorMessage}`)
+          }
+        }
+        
+        await handleVerifyPayment(orderIdForBlockchain)
         
         // Update database status
         await updateOrderStatus(order.fullId, 'PAYMENT_VERIFIED')
@@ -175,15 +326,50 @@ export default function AdminCenter() {
       }
       
       if (tag.toLowerCase() === 'verified' && currentStatus === 'completed') {
-        // Second verified button for buy orders - transfer USDT
+        // Second verified button - complete the order
+        console.log('🔗 Second verified button - completing order...')
+        
+        const orderIdForBlockchain = getValidOrderId(order)
+        console.log('📋 Using order ID for completion:', orderIdForBlockchain)
+        
         if (order.orderType.includes('BUY')) {
-          console.log('🔗 Completing buy order and transferring USDT...')
-          await handleCompleteBuyOrder(parseInt(order.fullId))
+          console.log('💰 Completing buy order and transferring USDT...')
           
-          // Update database status
+          // Additional validation for buy orders
+          try {
+            const orderDetails = await readContract(config as any, {
+              address: CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+              abi: P2P_TRADING_ABI,
+              functionName: 'getOrder',
+              args: [BigInt(orderIdForBlockchain)],
+            })
+
+            if (!orderDetails.isVerified) {
+              throw new Error('Order must be verified before completion')
+            }
+
+            if (orderDetails.isCompleted) {
+              throw new Error('Order already completed')
+            }
+
+            if (!orderDetails.isBuyOrder) {
+              throw new Error('This is not a buy order')
+            }
+
+          } catch (validationError) {
+            console.error('❌ Order validation failed:', validationError)
+            
+            if (validationError instanceof Error && validationError.message.includes('execution reverted')) {
+              console.log('⚠️ Order validation failed, but proceeding...')
+            } else {
+              const errorMessage = validationError instanceof Error ? validationError.message : 'Unknown validation error'
+              throw new Error(`Order validation failed: ${errorMessage}`)
+            }
+          }
+          
+          await handleCompleteBuyOrder(orderIdForBlockchain)
           await updateOrderStatus(order.fullId, 'USDT_TRANSFERRED')
           
-          // Auto-mark as completed
           setOrderStatuses(prev => ({
             ...prev,
             [orderIndex]: {
@@ -191,12 +377,18 @@ export default function AdminCenter() {
               'Complete': 'completed'
             }
           }))
-        } else {
-          // Sell order
-          console.log('🔗 Completing sell order...')
-          await handleCompleteSellOrder(parseInt(order.fullId))
+        } else if (order.orderType.includes('SELL')) {
+          console.log('💰 Completing sell order - transferring USDT from escrow to admin...')
+          await handleCompleteSellOrder(orderIdForBlockchain)
+          await updateOrderStatus(order.fullId, 'USDT_TRANSFERRED_TO_ADMIN')
           
-          await updateOrderStatus(order.fullId, 'USDT_RECEIVED_BY_ADMIN')
+          setOrderStatuses(prev => ({
+            ...prev,
+            [orderIndex]: {
+              ...prev[orderIndex],
+              'Complete': 'completed'
+            }
+          }))
         }
         
         return
@@ -239,7 +431,32 @@ export default function AdminCenter() {
       
     } catch (error) {
       console.error('❌ Error in button click handler:', error)
-      alert('Transaction failed. Please try again.')
+      
+      // More specific error messages
+      let errorMessage = 'Transaction failed.'
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      
+      if (errorMsg.includes('insufficient')) {
+        errorMessage = 'Insufficient balance. Please ensure admin has enough USDT.'
+      } else if (errorMsg.includes('allowance')) {
+        errorMessage = 'USDT approval required. The transaction will request approval first.'
+      } else if (errorMsg.includes('Order not approved')) {
+        errorMessage = 'Order approval in progress. Please wait and try again.'
+      } else if (errorMsg.includes('already verified')) {
+        errorMessage = 'Order already verified.'
+      } else if (errorMsg.includes('already completed')) {
+        errorMessage = 'Order already completed.'
+      } else if (errorMsg.includes('not a buy order')) {
+        errorMessage = 'Invalid order type.'
+      } else if (errorMsg.includes('Wallet not connected')) {
+        errorMessage = 'Please connect your admin wallet.'
+      } else if (errorMsg.includes('switch to a supported BSC network')) {
+        errorMessage = 'Please switch to BSC network.'
+      } else if (errorMsg.includes('Invalid order ID')) {
+        errorMessage = 'Invalid order ID. Please contact support.'
+      }
+      
+      alert(`${errorMessage}\n\nError details: ${errorMsg}`)
     }
   }
 

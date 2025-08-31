@@ -1,54 +1,72 @@
-import { useWalletManager } from './useWalletManager'
 import { useState } from 'react'
+import { useWalletManager } from './useWalletManager'
 
 export function useAdminContract() {
+  const [isTransacting, setIsTransacting] = useState(false)
+  const [lastAction, setLastAction] = useState<'verifying' | 'completing_buy' | 'completing_sell' | 'approving' | null>(null)
+  
   const { 
     verifyPaymentOnChain, 
     completeBuyOrderOnChain, 
     completeSellOrderOnChain,
-    isPending,
-    isConfirming,
-    hash
+    approveOrderOnChain, 
+    hash 
   } = useWalletManager()
-  
-  const [lastAction, setLastAction] = useState<string | null>(null)
 
   const handleVerifyPayment = async (orderId: number) => {
     try {
+      setIsTransacting(true)
       setLastAction('verifying')
-      console.log('🔗 Verifying payment on blockchain for order:', orderId)
       await verifyPaymentOnChain(orderId)
-      return true
     } catch (error) {
-      console.error('❌ Error verifying payment on blockchain:', error)
-      setLastAction(null)
+      console.error('Error verifying payment:', error)
       throw error
+    } finally {
+      setIsTransacting(false)
+      setLastAction(null)
     }
   }
 
   const handleCompleteBuyOrder = async (orderId: number) => {
     try {
+      setIsTransacting(true)
       setLastAction('completing_buy')
-      console.log('🔗 Completing buy order on blockchain for order:', orderId)
       await completeBuyOrderOnChain(orderId)
-      return true
     } catch (error) {
-      console.error('❌ Error completing buy order on blockchain:', error)
-      setLastAction(null)
+      console.error('Error completing buy order:', error)
       throw error
+    } finally {
+      setIsTransacting(false)
+      setLastAction(null)
     }
   }
 
   const handleCompleteSellOrder = async (orderId: number) => {
     try {
+      setIsTransacting(true)
       setLastAction('completing_sell')
-      console.log('🔗 Completing sell order on blockchain for order:', orderId)
       await completeSellOrderOnChain(orderId)
-      return true
     } catch (error) {
-      console.error('❌ Error completing sell order on blockchain:', error)
-      setLastAction(null)
+      console.error('Error completing sell order:', error)
       throw error
+    } finally {
+      setIsTransacting(false)
+      setLastAction(null)
+    }
+  }
+
+  // Add the missing handleApproveOrder function:
+  const handleApproveOrder = async (orderId: number) => {
+    try {
+      setIsTransacting(true)
+      setLastAction('approving')
+      await approveOrderOnChain(orderId)
+    } catch (error) {
+      console.error('Error approving order:', error)
+      throw error
+    } finally {
+      setIsTransacting(false)
+      setLastAction(null)
     }
   }
 
@@ -56,7 +74,8 @@ export function useAdminContract() {
     handleVerifyPayment,
     handleCompleteBuyOrder,
     handleCompleteSellOrder,
-    isTransacting: isPending || isConfirming,
+    handleApproveOrder,
+    isTransacting,
     lastAction,
     hash
   }

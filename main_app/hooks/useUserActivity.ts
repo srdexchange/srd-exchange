@@ -1,49 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react'
 
-export const useUserActivity = (timeoutMs: number = 5000) => {
-  const [isActive, setIsActive] = useState(false);
-  const [lastActivity, setLastActivity] = useState(Date.now());
-
-  const updateActivity = useCallback(() => {
-    setLastActivity(Date.now());
-    setIsActive(true);
-  }, []);
+export function useUserActivity(timeoutMs: number = 5000) {
+  const [isActive, setIsActive] = useState(false)
 
   useEffect(() => {
-    const events = [
-      'mousedown',
-      'mousemove',
-      'keypress',
-      'scroll',
-      'touchstart',
-      'click',
-      'focus',
-      'input'
-    ];
+    let timeoutId: NodeJS.Timeout
 
-    // Add event listeners
+    const handleActivity = () => {
+      setIsActive(true)
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        setIsActive(false)
+      }, timeoutMs)
+    }
+
+    // Add event listeners for user activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
+    
     events.forEach(event => {
-      document.addEventListener(event, updateActivity, true);
-    });
+      document.addEventListener(event, handleActivity, true)
+    })
+
+    // Set initial timeout
+    timeoutId = setTimeout(() => {
+      setIsActive(false)
+    }, timeoutMs)
 
     // Cleanup
     return () => {
       events.forEach(event => {
-        document.removeEventListener(event, updateActivity, true);
-      });
-    };
-  }, [updateActivity]);
+        document.removeEventListener(event, handleActivity, true)
+      })
+      clearTimeout(timeoutId)
+    }
+  }, [timeoutMs])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      if (now - lastActivity > timeoutMs) {
-        setIsActive(false);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [lastActivity, timeoutMs]);
-
-  return isActive;
-};
+  return isActive
+}

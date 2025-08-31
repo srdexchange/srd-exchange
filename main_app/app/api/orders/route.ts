@@ -81,7 +81,9 @@ export async function POST(request: NextRequest) {
       usdtAmount, 
       buyRate, 
       sellRate, 
-      paymentMethod 
+      paymentMethod,
+      blockchainOrderId,
+      orderId
     } = await request.json()
 
     // Validation
@@ -118,11 +120,12 @@ export async function POST(request: NextRequest) {
     const order = await prisma.order.create({
       data: {
         userId: user.id,
-        orderType: orderType,
-        amount: parseFloat(amount), 
-        usdtAmount: parseFloat(usdtAmount), 
+        orderType,
+        amount: parseFloat(amount),
+        usdtAmount: usdtAmount ? parseFloat(usdtAmount) : null,
         buyRate: buyRate ? parseFloat(buyRate) : null,
         sellRate: sellRate ? parseFloat(sellRate) : null,
+        blockchainOrderId: blockchainOrderId || null, // Add this
         status: 'PENDING'
       },
       include: {

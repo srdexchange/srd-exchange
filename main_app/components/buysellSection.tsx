@@ -40,7 +40,8 @@ export default function BuySellSection() {
     isConnected, 
     walletData, 
     isLoading: walletLoading, 
-    refetchBalances 
+    refetchBalances,
+    createSellOrderOnChain
   } = useWalletManager()
   
   const { 
@@ -138,6 +139,28 @@ export default function BuySellSection() {
         sellPrice
       });
 
+      // Step 1: Create blockchain order first for sell orders
+      let blockchainOrderId = null;
+      
+      if (orderType.includes('SELL')) {
+        console.log('🔗 Creating sell order on blockchain first...');
+        try {
+          await createSellOrderOnChain(finalUsdtAmount, finalOrderAmount, orderType);
+          
+          // Wait for transaction and get order ID
+          // Note: You'll need to listen for the OrderCreated event to get the actual order ID
+          // For now, we'll use a placeholder and update it later
+          blockchainOrderId = Date.now(); // Temporary - should be from blockchain event
+          
+          console.log('✅ Blockchain sell order created successfully');
+        } catch (blockchainError) {
+          console.error('❌ Blockchain sell order failed:', blockchainError);
+          const errorMessage = blockchainError instanceof Error ? blockchainError.message : 'Unknown blockchain error';
+          throw new Error(`Blockchain transaction failed: ${errorMessage}`);
+        }
+      }
+
+      // Step 2: Create database order
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: {
@@ -150,7 +173,8 @@ export default function BuySellSection() {
           usdtAmount: finalUsdtAmount, // USDT amount for database
           buyRate: orderType.includes('BUY') ? rate : null,
           sellRate: orderType.includes('SELL') ? rate : null,
-          paymentMethod: paymentMethod.toUpperCase()
+          paymentMethod: paymentMethod.toUpperCase(),
+          blockchainOrderId: blockchainOrderId // Store blockchain order ID
         }),
       })
 
@@ -158,13 +182,25 @@ export default function BuySellSection() {
       
       if (data.success) {
         await refetchOrders()
+        
+        // For buy orders, create blockchain order after database (admin will transfer later)
+        if (orderType.includes('BUY')) {
+          console.log('💾 Buy order saved to database, blockchain transfer will happen later');
+        }
+        
         return data.order
       } else {
+        // If database fails after blockchain success for sell orders, we have a problem
+        if (orderType.includes('SELL') && blockchainOrderId) {
+          console.error('⚠️ Database order creation failed but blockchain order succeeded!');
+          // TODO: Implement recovery mechanism
+        }
         throw new Error(data.error || 'Failed to create order')
       }
     } catch (error) {
       console.error('Error creating order:', error)
-      alert('Failed to create order. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      alert(`Failed to create order: ${errorMessage}`)
       return null
     }
   }

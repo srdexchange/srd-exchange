@@ -210,6 +210,23 @@ export default function SellUPIModal({
                       Type: {orderData.orderType} • Method: {paymentMethod}
                     </div>
                   )}
+
+                  {/* Blockchain Status for Sell Orders */}
+                  {orderData && orderData.orderType.includes('SELL') && (
+                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <div className="text-sm text-green-400 font-medium mb-1">
+                        ✅ USDT Secured in Smart Contract
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {parseFloat(displayUsdtAmount || '0').toFixed(4)} USDT has been transferred to the smart contract and is held securely until payment is confirmed.
+                      </div>
+                      {orderData.blockchainOrderId && (
+                        <div className="text-xs text-blue-400 mt-1">
+                          Blockchain Order ID: #{orderData.blockchainOrderId}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="flex items-center justify-center">
                     <svg
