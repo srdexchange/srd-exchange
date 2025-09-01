@@ -14,7 +14,7 @@ const CONTRACTS = {
   },
   P2P_TRADING: {
     [56]: '0x0000000000000000000000000000000000000000' as Address, // Deploy and update
-    [97]: '0xE0deDEAC4656F82076ded1B1291e89F94b8a5981' as Address, // Your deployed testnet address
+    [97]: '0x68546e6002F1d3a0c3f330d702Fd21db53a4F878' as Address, // Your deployed testnet address
   }
 }
 
