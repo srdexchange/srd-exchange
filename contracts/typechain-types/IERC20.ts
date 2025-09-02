@@ -23,9 +23,13 @@ import type {
 
 export interface IERC20Interface extends Interface {
   getFunction(
-    nameOrSignature: "balanceOf" | "transfer" | "transferFrom"
+    nameOrSignature: "allowance" | "balanceOf" | "transfer" | "transferFrom"
   ): FunctionFragment;
 
+  encodeFunctionData(
+    functionFragment: "allowance",
+    values: [AddressLike, AddressLike]
+  ): string;
   encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
@@ -39,6 +43,7 @@ export interface IERC20Interface extends Interface {
     values: [AddressLike, AddressLike, BigNumberish]
   ): string;
 
+  decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "transfer", data: BytesLike): Result;
   decodeFunctionResult(
@@ -90,6 +95,12 @@ export interface IERC20 extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  allowance: TypedContractMethod<
+    [owner: AddressLike, spender: AddressLike],
+    [bigint],
+    "view"
+  >;
+
   balanceOf: TypedContractMethod<[account: AddressLike], [bigint], "view">;
 
   transfer: TypedContractMethod<
@@ -108,6 +119,13 @@ export interface IERC20 extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "allowance"
+  ): TypedContractMethod<
+    [owner: AddressLike, spender: AddressLike],
+    [bigint],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;

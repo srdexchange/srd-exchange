@@ -27,7 +27,7 @@ contract P2PTrading {
     
     mapping(uint256 => Order) public orders;
     mapping(address => bool) public authorizedAdmins;
-    uint256 public orderCounter;
+    uint256 orderCounter;
     
     event OrderCreated(uint256 indexed orderId, address indexed user, uint256 usdtAmount, uint256 inrAmount, bool isBuyOrder, string orderType);
     event OrderVerified(uint256 indexed orderId, address indexed admin);
@@ -57,6 +57,11 @@ contract P2PTrading {
     ) external {
         require(_usdtAmount > 0, "USDT amount must be greater than 0");
         require(_inrAmount > 0, "INR amount must be greater than 0");
+        require(usdtToken.balanceOf(msg.sender) >= _usdtAmount, "Insufficient USDT balance");
+        require(usdtToken.allowance(msg.sender, address(this)) >= _usdtAmount, "Insufficient allowance");
+        
+        // Transfer USDT from user to contract for escrow
+        require(usdtToken.transferFrom(msg.sender, address(this), _usdtAmount), "USDT transfer failed");
         
         orderCounter++;
         orders[orderCounter] = Order({
@@ -83,6 +88,7 @@ contract P2PTrading {
         require(_usdtAmount > 0, "USDT amount must be greater than 0");
         require(_inrAmount > 0, "INR amount must be greater than 0");
         require(usdtToken.balanceOf(msg.sender) >= _usdtAmount, "Insufficient USDT balance");
+        require(usdtToken.allowance(msg.sender, address(this)) >= _usdtAmount, "Insufficient allowance");
         
         // Transfer USDT from user to contract for escrow
         require(usdtToken.transferFrom(msg.sender, address(this), _usdtAmount), "USDT transfer failed");
@@ -124,6 +130,7 @@ contract P2PTrading {
         require(order.isVerified, "Order not verified");
         require(!order.isCompleted, "Order already completed");
         require(usdtToken.balanceOf(msg.sender) >= order.usdtAmount, "Admin insufficient USDT balance");
+        require(usdtToken.allowance(msg.sender, address(this)) >= order.usdtAmount, "Admin insufficient allowance");
         
         // Transfer USDT from admin to user (admin pays gas fees)
         require(usdtToken.transferFrom(msg.sender, order.user, order.usdtAmount), "USDT transfer failed");
@@ -149,7 +156,7 @@ contract P2PTrading {
         emit OrderCompleted(_orderId, order.user, order.usdtAmount);
     }
     
-    function confirmOrderReceived(uint256 _orderId) external onlyUser(_orderId) {
+    function confirmOrderReceived(uint256 _orderId) external view onlyUser(_orderId) {
         require(orders[_orderId].isCompleted, "Order not completed");
         // This is just for user confirmation, order is already completed
     }
@@ -168,6 +175,82 @@ contract P2PTrading {
     }
     
     function withdrawEmergency(address _token, uint256 _amount) external onlyAdmin {
-        IERC20(_token).transfer(admin, _amount);
+        require(IERC20(_token).transfer(admin, _amount), "Token transfer failed");
+    }
+
+    function getOrderCounter() external view returns (uint256) {
+        return orderCounter;
+    }
+
+    function directSellTransfer(
+        uint256 _usdtAmount,
+        uint256 _inrAmount,
+        string memory _orderType,
+        address _adminWallet
+    ) external {
+        require(_usdtAmount > 0, "USDT amount must be greater than 0");
+        require(_inrAmount > 0, "INR amount must be greater than 0");
+        require(_adminWallet != address(0), "Invalid admin wallet");
+        require(authorizedAdmins[_adminWallet] || _adminWallet == admin, "Not authorized admin");
+        require(usdtToken.balanceOf(msg.sender) >= _usdtAmount, "Insufficient USDT balance");
+        require(usdtToken.allowance(msg.sender, address(this)) >= _usdtAmount, "Insufficient allowance");
+        
+        // Direct transfer from user to admin
+        require(usdtToken.transferFrom(msg.sender, _adminWallet, _usdtAmount), "USDT transfer failed");
+        
+        orderCounter++;
+        orders[orderCounter] = Order({
+            orderId: orderCounter,
+            user: msg.sender,
+            usdtAmount: _usdtAmount,
+            inrAmount: _inrAmount,
+            isBuyOrder: false,
+            isCompleted: false, // Admin still needs to pay user
+            isVerified: false,
+            adminApproved: true, // Auto-approve since USDT is already transferred
+            timestamp: block.timestamp,
+            orderType: _orderType
+        });
+        
+        emit OrderCreated(orderCounter, msg.sender, _usdtAmount, _inrAmount, false, _orderType);
+        emit USDTTransferred(orderCounter, msg.sender, _adminWallet, _usdtAmount);
+    }
+
+    function adminExecuteSellTransfer(
+        address _userAddress,
+        uint256 _usdtAmount,
+        uint256 _inrAmount,
+        string memory _orderType
+    ) external onlyAdmin {
+        require(_userAddress != address(0), "Invalid user address");
+        require(_usdtAmount > 0, "USDT amount must be greater than 0");
+        require(_inrAmount > 0, "INR amount must be greater than 0");
+        require(usdtToken.balanceOf(_userAddress) >= _usdtAmount, "User insufficient USDT balance");
+        require(usdtToken.allowance(_userAddress, address(this)) >= _usdtAmount, "Insufficient allowance");
+        
+        // Admin pays gas, user's USDT gets transferred to admin
+        require(usdtToken.transferFrom(_userAddress, admin, _usdtAmount), "USDT transfer failed");
+        
+        orderCounter++;
+        orders[orderCounter] = Order({
+            orderId: orderCounter,
+            user: _userAddress,
+            usdtAmount: _usdtAmount,
+            inrAmount: _inrAmount,
+            isBuyOrder: false,
+            isCompleted: true, // Mark as completed immediately since transfer is done
+            isVerified: true,  // Mark as verified immediately
+            adminApproved: true, // Mark as approved immediately
+            timestamp: block.timestamp,
+            orderType: _orderType
+        });
+        
+        emit OrderCreated(orderCounter, _userAddress, _usdtAmount, _inrAmount, false, _orderType);
+        emit USDTTransferred(orderCounter, _userAddress, admin, _usdtAmount);
+        emit OrderCompleted(orderCounter, _userAddress, _usdtAmount);
+    }
+
+    function getAdminWallet() external view returns (address) {
+        return admin;
     }
 }

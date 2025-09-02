@@ -27,29 +27,38 @@ export declare namespace P2PTrading {
   export type OrderStruct = {
     orderId: BigNumberish;
     user: AddressLike;
-    amount: BigNumberish;
+    usdtAmount: BigNumberish;
+    inrAmount: BigNumberish;
     isBuyOrder: boolean;
     isCompleted: boolean;
-    isApproved: boolean;
+    isVerified: boolean;
+    adminApproved: boolean;
     timestamp: BigNumberish;
+    orderType: string;
   };
 
   export type OrderStructOutput = [
     orderId: bigint,
     user: string,
-    amount: bigint,
+    usdtAmount: bigint,
+    inrAmount: bigint,
     isBuyOrder: boolean,
     isCompleted: boolean,
-    isApproved: boolean,
-    timestamp: bigint
+    isVerified: boolean,
+    adminApproved: boolean,
+    timestamp: bigint,
+    orderType: string
   ] & {
     orderId: bigint;
     user: string;
-    amount: bigint;
+    usdtAmount: bigint;
+    inrAmount: bigint;
     isBuyOrder: boolean;
     isCompleted: boolean;
-    isApproved: boolean;
+    isVerified: boolean;
+    adminApproved: boolean;
     timestamp: bigint;
+    orderType: string;
   };
 }
 
@@ -58,19 +67,31 @@ export interface P2PTradingInterface extends Interface {
     nameOrSignature:
       | "addAdmin"
       | "admin"
+      | "adminExecuteSellTransfer"
       | "approveOrder"
       | "authorizedAdmins"
-      | "completeOrder"
+      | "completeBuyOrder"
+      | "completeSellOrder"
+      | "confirmOrderReceived"
       | "createBuyOrder"
       | "createSellOrder"
+      | "directSellTransfer"
+      | "getAdminWallet"
       | "getOrder"
-      | "orderCounter"
+      | "getOrderCounter"
       | "orders"
+      | "removeAdmin"
       | "usdtToken"
+      | "verifyPayment"
+      | "withdrawEmergency"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "OrderApproved" | "OrderCompleted" | "OrderCreated"
+    nameOrSignatureOrTopic:
+      | "OrderCompleted"
+      | "OrderCreated"
+      | "OrderVerified"
+      | "USDTTransferred"
   ): EventFragment;
 
   encodeFunctionData(
@@ -79,6 +100,10 @@ export interface P2PTradingInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "admin", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "adminExecuteSellTransfer",
+    values: [AddressLike, BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "approveOrder",
     values: [BigNumberish]
   ): string;
@@ -87,33 +112,65 @@ export interface P2PTradingInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "completeOrder",
+    functionFragment: "completeBuyOrder",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "completeSellOrder",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "confirmOrderReceived",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "createBuyOrder",
-    values: [BigNumberish]
+    values: [BigNumberish, BigNumberish, string]
   ): string;
   encodeFunctionData(
     functionFragment: "createSellOrder",
-    values: [BigNumberish]
+    values: [BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "directSellTransfer",
+    values: [BigNumberish, BigNumberish, string, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getAdminWallet",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "getOrder",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "orderCounter",
+    functionFragment: "getOrderCounter",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "orders",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(
+    functionFragment: "removeAdmin",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "usdtToken", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "verifyPayment",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawEmergency",
+    values: [AddressLike, BigNumberish]
+  ): string;
 
   decodeFunctionResult(functionFragment: "addAdmin", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "admin", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "adminExecuteSellTransfer",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "approveOrder",
     data: BytesLike
@@ -123,7 +180,15 @@ export interface P2PTradingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "completeOrder",
+    functionFragment: "completeBuyOrder",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "completeSellOrder",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "confirmOrderReceived",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -134,32 +199,46 @@ export interface P2PTradingInterface extends Interface {
     functionFragment: "createSellOrder",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "directSellTransfer",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getAdminWallet",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getOrder", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "orderCounter",
+    functionFragment: "getOrderCounter",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "orders", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "removeAdmin",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "usdtToken", data: BytesLike): Result;
-}
-
-export namespace OrderApprovedEvent {
-  export type InputTuple = [orderId: BigNumberish];
-  export type OutputTuple = [orderId: bigint];
-  export interface OutputObject {
-    orderId: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
+  decodeFunctionResult(
+    functionFragment: "verifyPayment",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawEmergency",
+    data: BytesLike
+  ): Result;
 }
 
 export namespace OrderCompletedEvent {
-  export type InputTuple = [orderId: BigNumberish];
-  export type OutputTuple = [orderId: bigint];
+  export type InputTuple = [
+    orderId: BigNumberish,
+    user: AddressLike,
+    usdtAmount: BigNumberish
+  ];
+  export type OutputTuple = [orderId: bigint, user: string, usdtAmount: bigint];
   export interface OutputObject {
     orderId: bigint;
+    user: string;
+    usdtAmount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -171,20 +250,64 @@ export namespace OrderCreatedEvent {
   export type InputTuple = [
     orderId: BigNumberish,
     user: AddressLike,
-    amount: BigNumberish,
-    isBuyOrder: boolean
+    usdtAmount: BigNumberish,
+    inrAmount: BigNumberish,
+    isBuyOrder: boolean,
+    orderType: string
   ];
   export type OutputTuple = [
     orderId: bigint,
     user: string,
-    amount: bigint,
-    isBuyOrder: boolean
+    usdtAmount: bigint,
+    inrAmount: bigint,
+    isBuyOrder: boolean,
+    orderType: string
   ];
   export interface OutputObject {
     orderId: bigint;
     user: string;
-    amount: bigint;
+    usdtAmount: bigint;
+    inrAmount: bigint;
     isBuyOrder: boolean;
+    orderType: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace OrderVerifiedEvent {
+  export type InputTuple = [orderId: BigNumberish, admin: AddressLike];
+  export type OutputTuple = [orderId: bigint, admin: string];
+  export interface OutputObject {
+    orderId: bigint;
+    admin: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace USDTTransferredEvent {
+  export type InputTuple = [
+    orderId: BigNumberish,
+    from: AddressLike,
+    to: AddressLike,
+    amount: BigNumberish
+  ];
+  export type OutputTuple = [
+    orderId: bigint,
+    from: string,
+    to: string,
+    amount: bigint
+  ];
+  export interface OutputObject {
+    orderId: bigint;
+    from: string;
+    to: string;
+    amount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -239,6 +362,17 @@ export interface P2PTrading extends BaseContract {
 
   admin: TypedContractMethod<[], [string], "view">;
 
+  adminExecuteSellTransfer: TypedContractMethod<
+    [
+      _userAddress: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   approveOrder: TypedContractMethod<
     [_orderId: BigNumberish],
     [void],
@@ -247,23 +381,48 @@ export interface P2PTrading extends BaseContract {
 
   authorizedAdmins: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
-  completeOrder: TypedContractMethod<
+  completeBuyOrder: TypedContractMethod<
     [_orderId: BigNumberish],
     [void],
     "nonpayable"
   >;
 
+  completeSellOrder: TypedContractMethod<
+    [_orderId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  confirmOrderReceived: TypedContractMethod<
+    [_orderId: BigNumberish],
+    [void],
+    "view"
+  >;
+
   createBuyOrder: TypedContractMethod<
-    [_amount: BigNumberish],
+    [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
     [void],
     "nonpayable"
   >;
 
   createSellOrder: TypedContractMethod<
-    [_amount: BigNumberish],
+    [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
     [void],
     "nonpayable"
   >;
+
+  directSellTransfer: TypedContractMethod<
+    [
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string,
+      _adminWallet: AddressLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  getAdminWallet: TypedContractMethod<[], [string], "view">;
 
   getOrder: TypedContractMethod<
     [_orderId: BigNumberish],
@@ -271,25 +430,53 @@ export interface P2PTrading extends BaseContract {
     "view"
   >;
 
-  orderCounter: TypedContractMethod<[], [bigint], "view">;
+  getOrderCounter: TypedContractMethod<[], [bigint], "view">;
 
   orders: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, bigint, boolean, boolean, boolean, bigint] & {
+      [
+        bigint,
+        string,
+        bigint,
+        bigint,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        bigint,
+        string
+      ] & {
         orderId: bigint;
         user: string;
-        amount: bigint;
+        usdtAmount: bigint;
+        inrAmount: bigint;
         isBuyOrder: boolean;
         isCompleted: boolean;
-        isApproved: boolean;
+        isVerified: boolean;
+        adminApproved: boolean;
         timestamp: bigint;
+        orderType: string;
       }
     ],
     "view"
   >;
 
+  removeAdmin: TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
+
   usdtToken: TypedContractMethod<[], [string], "view">;
+
+  verifyPayment: TypedContractMethod<
+    [_orderId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  withdrawEmergency: TypedContractMethod<
+    [_token: AddressLike, _amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
     key: string | FunctionFragment
@@ -302,20 +489,61 @@ export interface P2PTrading extends BaseContract {
     nameOrSignature: "admin"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "adminExecuteSellTransfer"
+  ): TypedContractMethod<
+    [
+      _userAddress: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "approveOrder"
   ): TypedContractMethod<[_orderId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "authorizedAdmins"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
-    nameOrSignature: "completeOrder"
+    nameOrSignature: "completeBuyOrder"
   ): TypedContractMethod<[_orderId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "completeSellOrder"
+  ): TypedContractMethod<[_orderId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "confirmOrderReceived"
+  ): TypedContractMethod<[_orderId: BigNumberish], [void], "view">;
+  getFunction(
     nameOrSignature: "createBuyOrder"
-  ): TypedContractMethod<[_amount: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "createSellOrder"
-  ): TypedContractMethod<[_amount: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "directSellTransfer"
+  ): TypedContractMethod<
+    [
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string,
+      _adminWallet: AddressLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "getAdminWallet"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "getOrder"
   ): TypedContractMethod<
@@ -324,36 +552,56 @@ export interface P2PTrading extends BaseContract {
     "view"
   >;
   getFunction(
-    nameOrSignature: "orderCounter"
+    nameOrSignature: "getOrderCounter"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "orders"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, bigint, boolean, boolean, boolean, bigint] & {
+      [
+        bigint,
+        string,
+        bigint,
+        bigint,
+        boolean,
+        boolean,
+        boolean,
+        boolean,
+        bigint,
+        string
+      ] & {
         orderId: bigint;
         user: string;
-        amount: bigint;
+        usdtAmount: bigint;
+        inrAmount: bigint;
         isBuyOrder: boolean;
         isCompleted: boolean;
-        isApproved: boolean;
+        isVerified: boolean;
+        adminApproved: boolean;
         timestamp: bigint;
+        orderType: string;
       }
     ],
     "view"
   >;
   getFunction(
+    nameOrSignature: "removeAdmin"
+  ): TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "usdtToken"
   ): TypedContractMethod<[], [string], "view">;
-
-  getEvent(
-    key: "OrderApproved"
-  ): TypedContractEvent<
-    OrderApprovedEvent.InputTuple,
-    OrderApprovedEvent.OutputTuple,
-    OrderApprovedEvent.OutputObject
+  getFunction(
+    nameOrSignature: "verifyPayment"
+  ): TypedContractMethod<[_orderId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "withdrawEmergency"
+  ): TypedContractMethod<
+    [_token: AddressLike, _amount: BigNumberish],
+    [void],
+    "nonpayable"
   >;
+
   getEvent(
     key: "OrderCompleted"
   ): TypedContractEvent<
@@ -368,20 +616,23 @@ export interface P2PTrading extends BaseContract {
     OrderCreatedEvent.OutputTuple,
     OrderCreatedEvent.OutputObject
   >;
+  getEvent(
+    key: "OrderVerified"
+  ): TypedContractEvent<
+    OrderVerifiedEvent.InputTuple,
+    OrderVerifiedEvent.OutputTuple,
+    OrderVerifiedEvent.OutputObject
+  >;
+  getEvent(
+    key: "USDTTransferred"
+  ): TypedContractEvent<
+    USDTTransferredEvent.InputTuple,
+    USDTTransferredEvent.OutputTuple,
+    USDTTransferredEvent.OutputObject
+  >;
 
   filters: {
-    "OrderApproved(uint256)": TypedContractEvent<
-      OrderApprovedEvent.InputTuple,
-      OrderApprovedEvent.OutputTuple,
-      OrderApprovedEvent.OutputObject
-    >;
-    OrderApproved: TypedContractEvent<
-      OrderApprovedEvent.InputTuple,
-      OrderApprovedEvent.OutputTuple,
-      OrderApprovedEvent.OutputObject
-    >;
-
-    "OrderCompleted(uint256)": TypedContractEvent<
+    "OrderCompleted(uint256,address,uint256)": TypedContractEvent<
       OrderCompletedEvent.InputTuple,
       OrderCompletedEvent.OutputTuple,
       OrderCompletedEvent.OutputObject
@@ -392,7 +643,7 @@ export interface P2PTrading extends BaseContract {
       OrderCompletedEvent.OutputObject
     >;
 
-    "OrderCreated(uint256,address,uint256,bool)": TypedContractEvent<
+    "OrderCreated(uint256,address,uint256,uint256,bool,string)": TypedContractEvent<
       OrderCreatedEvent.InputTuple,
       OrderCreatedEvent.OutputTuple,
       OrderCreatedEvent.OutputObject
@@ -401,6 +652,28 @@ export interface P2PTrading extends BaseContract {
       OrderCreatedEvent.InputTuple,
       OrderCreatedEvent.OutputTuple,
       OrderCreatedEvent.OutputObject
+    >;
+
+    "OrderVerified(uint256,address)": TypedContractEvent<
+      OrderVerifiedEvent.InputTuple,
+      OrderVerifiedEvent.OutputTuple,
+      OrderVerifiedEvent.OutputObject
+    >;
+    OrderVerified: TypedContractEvent<
+      OrderVerifiedEvent.InputTuple,
+      OrderVerifiedEvent.OutputTuple,
+      OrderVerifiedEvent.OutputObject
+    >;
+
+    "USDTTransferred(uint256,address,address,uint256)": TypedContractEvent<
+      USDTTransferredEvent.InputTuple,
+      USDTTransferredEvent.OutputTuple,
+      USDTTransferredEvent.OutputObject
+    >;
+    USDTTransferred: TypedContractEvent<
+      USDTTransferredEvent.InputTuple,
+      USDTTransferredEvent.OutputTuple,
+      USDTTransferredEvent.OutputObject
     >;
   };
 }

@@ -9,7 +9,6 @@ async function main() {
   const network = await ethers.provider.getNetwork();
   console.log("Network:", network.name, "Chain ID:", Number(network.chainId));
 
-
   const USDT_ADDRESSES: { [key: number]: string } = {
     56: "0x55d398326f99059fF775485246999027B3197955", // BSC Mainnet
     97: "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd", // BSC Testnet
@@ -41,6 +40,15 @@ async function main() {
   console.log("📄 USDT address:", usdtAddress);
   console.log("🌐 Network:", network.name);
   console.log("⛽ Deployer address:", deployer.address);
+  
+  // Test the deployed contract
+  try {
+    const orderCounter = await p2pTrading.getOrderCounter();
+    console.log("📊 Current order counter:", orderCounter.toString());
+    
+  } catch (error) {
+    console.error("❌ Error testing deployed contract:", error);
+  }
   
   // Update the contract address in your frontend
   console.log("\n🔥 Update CONTRACTS.P2P_TRADING address in useWalletManager.ts:");

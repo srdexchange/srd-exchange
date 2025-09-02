@@ -6,13 +6,15 @@
     "test": "test"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0",
+    "@wagmi/core": "^2.20.3",
     "dotenv": "^17.2.1"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "dotenv": "^16.0.0",
     "hardhat": "^2.26.0",
-    "mocha": "^10.8.2",
-    "dotenv": "^16.0.0"
+    "mocha": "^10.8.2"
   },
   "scripts": {
     "compile": "hardhat compile",
