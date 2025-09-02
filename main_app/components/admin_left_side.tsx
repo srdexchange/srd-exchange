@@ -93,7 +93,13 @@ export default function AdminLeftSide() {
     setError(null);
 
     try {
-      const statusParam = activeFilter.toLowerCase();
+      let statusParam = activeFilter.toLowerCase();
+      
+      // Include sell orders that need admin payment in pending filter
+      if (statusParam === 'pending') {
+        statusParam = 'pending,pending_admin_payment';
+      }
+      
       console.log('Fetching orders with status:', statusParam);
 
       const data = await makeAdminRequest(`/api/admin/orders?status=${statusParam}`);
@@ -182,6 +188,27 @@ export default function AdminLeftSide() {
   const handleCloseCancelModal = () => {
     setShowCancelModal(false);
     setSelectedOrder(null);
+  };
+
+  const handleConfirmPayment = async (order: Order) => {
+    try {
+      console.log('Confirming payment sent for sell order:', order.fullId);
+      const data = await makeAdminRequest(`/api/admin/orders/${order.fullId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'COMPLETED'
+        })
+      });
+
+      if (data.success) {
+        console.log('Payment confirmed successfully');
+        fetchOrders();
+      } else {
+        console.error('Failed to confirm payment:', data.error);
+      }
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+    }
   };
 
   const filteredOrders = orders.filter(order =>
@@ -351,18 +378,18 @@ export default function AdminLeftSide() {
             
             if (order.orderType.includes('BUY')) {
        
-              const usdtAmount = (order.amount / buyRate).toFixed(6);
+              const usdtAmount = (order.amount / buyRate).toFixed(2);
               displayAmount = `₹${order.amount}`;
               displayConversion = `${usdtAmount} USDT`;
             } else {
 
               if (order.usdtAmount) {
                
-                displayAmount = `${parseFloat(order.usdtAmount).toFixed(4)} USDT`;
+                displayAmount = `${parseFloat(order.usdtAmount).toFixed(2)} USDT`;
                 displayConversion = `₹${order.amount}`;
               } else {
                 
-                const usdtAmount = (order.amount / sellRate).toFixed(4);
+                const usdtAmount = (order.amount / sellRate).toFixed(2);
                 displayAmount = `${usdtAmount} USDT`;
                 displayConversion = `₹${order.amount}`;
               }
@@ -440,21 +467,35 @@ export default function AdminLeftSide() {
                   </span>
                 </div>
 
-                {activeFilter === "Pending" && order.status === "PENDING" && (
-                  <div className="flex space-x-3 justify-end">
-                    <button 
-                      onClick={() => handleAccept(order)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
-                    >
-                      Accept
-                    </button>
-                    <button 
-                      onClick={() => handleReject(order)}
-                      className="bg-yellow-600 hover:bg-red-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
-                    >
-                      Reject
-                    </button>
-                  </div>
+                {activeFilter === "Pending" && (
+                  (order.status === "PENDING" || order.status === "PENDING_ADMIN_PAYMENT") && (
+                    <div className="flex space-x-3 justify-end">
+                      {order.status === "PENDING" && (
+                        <>
+                          <button 
+                            onClick={() => handleAccept(order)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
+                          >
+                            Accept
+                          </button>
+                          <button 
+                            onClick={() => handleReject(order)}
+                            className="bg-yellow-600 hover:bg-red-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {order.status === "PENDING_ADMIN_PAYMENT" && order.orderType.includes('SELL') && (
+                        <button 
+                          onClick={() => handleConfirmPayment(order)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-1 rounded-xs text-sm font-medium transition-all"
+                        >
+                          Confirm Payment Sent
+                        </button>
+                      )}
+                    </div>
+                  )
                 )}
               </div>
             );

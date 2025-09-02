@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient, OrderStatus } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
@@ -74,6 +74,11 @@ export async function GET(request: NextRequest) {
 // POST - Create new order
 export async function POST(request: NextRequest) {
   try {
+    console.log('📥 Orders API - POST request received');
+    
+    const body = await request.json()
+    console.log('📋 Request body:', body);
+    
     const { 
       walletAddress, 
       orderType, 
@@ -83,23 +88,53 @@ export async function POST(request: NextRequest) {
       sellRate, 
       paymentMethod,
       blockchainOrderId,
-      orderId
-    } = await request.json()
+      status
+    } = body
 
-    // Validation
-    if (!walletAddress || !orderType || !amount) {
+    // Enhanced validation
+    if (!walletAddress) {
+      console.error('❌ Missing walletAddress');
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Wallet address is required' },
+        { status: 400 }
+      )
+    }
+    
+    if (!orderType) {
+      console.error('❌ Missing orderType');
+      return NextResponse.json(
+        { error: 'Order type is required' },
+        { status: 400 }
+      )
+    }
+    
+    if (!amount || isNaN(parseFloat(amount))) {
+      console.error('❌ Invalid amount:', amount);
+      return NextResponse.json(
+        { error: 'Valid amount is required' },
         { status: 400 }
       )
     }
 
-    console.log('Creating order:', {
+    // Map status to valid OrderStatus values
+    let validStatus: OrderStatus = OrderStatus.PENDING; // Default status
+    if (status === 'BLOCKCHAIN_PENDING') {
+      validStatus = OrderStatus.PENDING;
+    } else if (status === 'PENDING_ADMIN_PAYMENT') {
+      validStatus = OrderStatus.ADMIN_APPROVED; // Map to existing valid status
+    } else if (status && Object.values(OrderStatus).includes(status as OrderStatus)) {
+      validStatus = status as OrderStatus;
+    }
+
+    console.log('✅ Validation passed, creating order:', {
       walletAddress,
       orderType,
       amount: `₹${amount}`,
-      usdtAmount: `${usdtAmount} USDT`,
-      rate: buyRate || sellRate
+      usdtAmount: usdtAmount ? `${usdtAmount} USDT` : 'N/A',
+      rate: buyRate || sellRate,
+      blockchainOrderId,
+      originalStatus: status,
+      validStatus: validStatus
     });
 
     // Find or create user
@@ -108,6 +143,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
+      console.log('👤 Creating new user for wallet:', walletAddress);
       user = await prisma.user.create({
         data: { 
           walletAddress: walletAddress.toLowerCase(),
@@ -116,7 +152,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Create order with proper amounts
+    console.log('👤 User found/created:', user.id);
+
+    // Create order with proper amounts and valid status
     const order = await prisma.order.create({
       data: {
         userId: user.id,
@@ -125,8 +163,8 @@ export async function POST(request: NextRequest) {
         usdtAmount: usdtAmount ? parseFloat(usdtAmount) : null,
         buyRate: buyRate ? parseFloat(buyRate) : null,
         sellRate: sellRate ? parseFloat(sellRate) : null,
-        blockchainOrderId: blockchainOrderId || null, // Add this
-        status: 'PENDING'
+        blockchainOrderId: blockchainOrderId || null,
+        status: validStatus // Use the mapped valid status
       },
       include: {
         user: {
@@ -140,34 +178,44 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    console.log('📝 Order created in database:', order.id);
+
     // Transform for frontend
     const transformedOrder = {
       id: `#${order.id.slice(-6)}`,
       fullId: order.id,
-      time: formatTime(order.createdAt),
-      amount: Number(order.amount), // Rupees
-      usdtAmount: Number(order.usdtAmount), // USDT
-      type: getOrderTypeLabel(order.orderType),
+      time: new Date(order.createdAt).toLocaleTimeString(),
+      amount: Number(order.amount),
+      usdtAmount: Number(order.usdtAmount || 0),
+      type: orderType.replace('_', ' '),
       orderType: order.orderType,
-      price: Number(order.buyRate || order.sellRate || 0),
-      currency: order.orderType === 'BUY_CDM' ? 'CDM' : 'UPI',
+      price: Number(order.buyRate || sellRate || 0),
+      currency: order.orderType === 'BUY_CDM' || 'SELL_CDM' ? 'CDM' : 'UPI', 
       status: order.status,
+      blockchainOrderId: order.blockchainOrderId,
       user: order.user,
       createdAt: order.createdAt
     }
 
-    console.log('Order created successfully:', transformedOrder);
+    console.log('✅ Order created successfully:', transformedOrder.id);
 
     return NextResponse.json({
       success: true,
       order: transformedOrder
     })
   } catch (error) {
-    console.error('Error creating order:', error)
+    console.error('❌ Error in orders API:', error)
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+    
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { 
+        error: 'Failed to create order', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     )
+  } finally {
+    await prisma.$disconnect()
   }
 }
 

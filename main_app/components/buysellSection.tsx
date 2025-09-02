@@ -7,19 +7,30 @@ import { useWalletManager } from '@/hooks/useWalletManager'
 import { useUserOrders } from '@/hooks/useUserOrders'
 import { useRates } from '@/hooks/useRates'
 import { useModalState } from '@/hooks/useModalState'
+import { useChainId } from 'wagmi'
 import BuyCDMModal from './modal/buy-cdm'
 import BuyUPIModal from './modal/buy-upi'
 import SellUPIModal from './modal/sell-upi'
 import SellCDMModal from './modal/sell-cdm'
 import BankDetailsModal, { BankDetailsData } from './modal/bank-details-modal'
 import { useBankDetails } from '@/hooks/useBankDetails'
+import { readContract } from '@wagmi/core'
+import { config } from '@/lib/wagmi'
 
+
+const CONTRACTS = {
+  P2P_TRADING: {
+    [56]: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    [97]: '0xF0913DEab11B8938EB82cc1DA1CEA433006DC71C' as `0x${string}`,
+  }
+}
 export default function BuySellSection() {
 
   const UPI_LIMIT_USDT = 100; 
   const CDM_MIN_USDT = 100;    
   const CDM_MAX_USDT = 500; 
 
+  const chainId = useChainId()
   const [activeTab, setActiveTab] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
   const [amount, setAmount] = useState('')
@@ -111,7 +122,7 @@ export default function BuySellSection() {
     setAmount('')
   }
 
-  // Create order function
+  // Create order function with enhanced error handling
   const createOrder = async (orderType: string, orderAmount: string, rate: number) => {
     if (!address) return null
 
@@ -136,72 +147,174 @@ export default function BuySellSection() {
         finalUsdtAmount,  // Always USDT amount
         rate,
         buyPrice,
-        sellPrice
+        sellPrice,
+        address,
+        paymentMethod
       });
 
-      // Step 1: Create blockchain order first for sell orders
-      let blockchainOrderId = null;
-      
       if (orderType.includes('SELL')) {
-        console.log('🔗 Creating sell order on blockchain first...');
+        console.log('💰 SELL ORDER: Direct USDT transfer to admin');
+        
         try {
+          console.log('🔍 Creating sell order with direct transfer:', {
+            finalUsdtAmount,
+            finalOrderAmount,
+            orderType,
+            userAddress: address
+          });
+          
+          // Step 1: Execute blockchain transfer (user to admin)
+          console.log('🔗 Step 1: Executing direct USDT transfer to admin...');
+          
           await createSellOrderOnChain(finalUsdtAmount, finalOrderAmount, orderType);
           
-          // Wait for transaction and get order ID
-          // Note: You'll need to listen for the OrderCreated event to get the actual order ID
-          // For now, we'll use a placeholder and update it later
-          blockchainOrderId = Date.now(); // Temporary - should be from blockchain event
+          // Wait for transaction to complete
+          console.log('⏳ Waiting for blockchain transaction...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
           
-          console.log('✅ Blockchain sell order created successfully');
+          // Step 2: Create database order after successful transfer
+          console.log('📝 Step 2: Creating database order after transfer...');
+          
+          const orderPayload = {
+            walletAddress: address,
+            orderType: orderType,
+            amount: finalOrderAmount, // Rupees for database
+            usdtAmount: finalUsdtAmount, // USDT amount for database
+            buyRate: null,
+            sellRate: rate,
+            paymentMethod: paymentMethod.toUpperCase(),
+            blockchainOrderId: null,
+            status: 'PENDING_ADMIN_PAYMENT' // Admin needs to pay user now
+          };
+          
+          console.log('📋 Order payload:', orderPayload);
+          
+          const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(orderPayload),
+          })
+  
+          console.log('📡 Database response status:', response.status);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Database API response error:', errorText);
+            throw new Error(`Database API error: ${response.status} - ${errorText}`);
+          }
+          
+          const data = await response.json()
+          console.log('📋 Database response data:', data);
+          
+          if (!data.success) {
+            console.error('❌ Database order creation failed:', data.error);
+            throw new Error(data.error || 'Failed to create database order');
+          }
+  
+          const databaseOrder = data.order
+          console.log('✅ Sell order created - USDT transferred, waiting for admin payment');
+          
+          await refetchOrders();
+          return databaseOrder;
+          
         } catch (blockchainError) {
-          console.error('❌ Blockchain sell order failed:', blockchainError);
-          const errorMessage = blockchainError instanceof Error ? blockchainError.message : 'Unknown blockchain error';
-          throw new Error(`Blockchain transaction failed: ${errorMessage}`);
+          console.error('❌ Sell order creation failed:', blockchainError);
+          
+          const errorMessage = blockchainError instanceof Error ? blockchainError.message : String(blockchainError);
+          
+          // Provide specific error messages
+          if (errorMessage.includes('USDT_APPROVAL_NEEDED')) {
+            throw new Error('USDT approval required. Please approve USDT spending in your wallet, then try creating the order again.');
+          } else if (errorMessage.includes('Insufficient USDT balance')) {
+            throw new Error('Insufficient USDT balance. Please ensure you have enough USDT for this order.');
+          } else if (errorMessage.includes('User rejected')) {
+            throw new Error('Transaction cancelled by user.');
+          } else {
+            throw new Error(`Sell order creation failed: ${errorMessage}`);
+          }
         }
-      }
-
-      // Step 2: Create database order
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      } else {
+        // For buy orders, create database order only (blockchain handled by admin)
+        console.log('💰 BUY ORDER: Database only (blockchain handled by admin)');
+        
+        const buyOrderPayload = {
           walletAddress: address,
           orderType: orderType,
-          amount: finalOrderAmount, // Rupees for database
-          usdtAmount: finalUsdtAmount, // USDT amount for database
+          amount: finalOrderAmount,
+          usdtAmount: finalUsdtAmount,
           buyRate: orderType.includes('BUY') ? rate : null,
           sellRate: orderType.includes('SELL') ? rate : null,
           paymentMethod: paymentMethod.toUpperCase(),
-          blockchainOrderId: blockchainOrderId // Store blockchain order ID
-        }),
-      })
+          blockchainOrderId: null,
+          status: 'PENDING'
+        };
+        
+        console.log('📋 Buy order payload:', buyOrderPayload);
+        
+        try {
+          const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(buyOrderPayload),
+          })
 
-      const data = await response.json()
-      
-      if (data.success) {
-        await refetchOrders()
-        
-        // For buy orders, create blockchain order after database (admin will transfer later)
-        if (orderType.includes('BUY')) {
-          console.log('💾 Buy order saved to database, blockchain transfer will happen later');
+          console.log('📡 Buy order response status:', response.status);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Buy order API response error:', errorText);
+            throw new Error(`Buy order API error: ${response.status} - ${errorText}`);
+          }
+
+          const data = await response.json()
+          console.log('📋 Buy order response data:', data);
+          
+          if (data.success) {
+            await refetchOrders()
+            console.log('💾 Buy order saved to database')
+            return data.order
+          } else {
+            throw new Error(data.error || 'Failed to create buy order')
+          }
+        } catch (buyOrderError) {
+          console.error('❌ Buy order database error:', buyOrderError);
+          const errorMessage = buyOrderError instanceof Error ? buyOrderError.message : String(buyOrderError);
+          throw new Error(`Buy order creation failed: ${errorMessage}`);
         }
-        
-        return data.order
-      } else {
-        // If database fails after blockchain success for sell orders, we have a problem
-        if (orderType.includes('SELL') && blockchainOrderId) {
-          console.error('⚠️ Database order creation failed but blockchain order succeeded!');
-          // TODO: Implement recovery mechanism
-        }
-        throw new Error(data.error || 'Failed to create order')
       }
     } catch (error) {
-      console.error('Error creating order:', error)
+      console.error('❌ Error creating order - Full details:', error);
+      console.error('❌ Error stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+      
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      alert(`Failed to create order: ${errorMessage}`)
-      return null
+      
+      // Enhanced error messages for better user experience
+      let displayMessage = errorMessage;
+      if (errorMessage.includes('approval required')) {
+        displayMessage = 'USDT approval required. Please approve USDT spending in your wallet first, then try creating the order again.';
+      } else if (errorMessage.includes('insufficient')) {
+        displayMessage = 'Insufficient USDT balance. Please check your wallet balance and ensure you have enough USDT for this order.';
+      } else if (errorMessage.includes('transfer failed')) {
+        displayMessage = 'USDT transfer failed. Please ensure you have enough USDT and BNB for gas fees.';
+      } else if (errorMessage.includes('Database error')) {
+        displayMessage = `Database error: ${errorMessage}. Please try again or contact support if the issue persists.`;
+      } else if (errorMessage.includes('Blockchain transaction failed')) {
+        displayMessage = 'Blockchain transaction failed. The database order was automatically cleaned up. Your funds are safe. Please try again.';
+      } else if (errorMessage.includes('execution reverted')) {
+        displayMessage = 'Smart contract error. Please check your USDT balance and allowance, then try again.';
+      } else if (errorMessage.includes('User rejected')) {
+        displayMessage = 'Transaction was cancelled by user.';
+      } else if (errorMessage.includes('API error')) {
+        displayMessage = `Server error: ${errorMessage}. Please try again or contact support.`;
+      }
+      
+      // Don't show the raw error to user, but log it for debugging
+      console.error('❌ Raw error for debugging:', error);
+      throw new Error(displayMessage);
     }
   }
 
@@ -352,7 +465,15 @@ export default function BuySellSection() {
         rate = sellPrice
       }
 
-      console.log('🚀 Creating order:', { orderType, orderAmount, rate });
+      console.log('🚀 Creating order with parameters:', { 
+        orderType, 
+        orderAmount, 
+        rate,
+        activeTab,
+        paymentMethod,
+        address,
+        isConnected
+      });
 
       const order = await createOrder(orderType, orderAmount, rate)
 
@@ -360,7 +481,9 @@ export default function BuySellSection() {
         console.log('✅ Order created successfully:', {
           id: order.id,
           fullId: order.fullId,
-          orderType: order.orderType
+          orderType: order.orderType,
+          status: order.status,
+          blockchainOrderId: order.blockchainOrderId
         });
         
         // Set current order for modal
@@ -386,9 +509,19 @@ export default function BuySellSection() {
         
         // Refresh orders after successful creation
         await refetchOrders()
+      } else {
+        console.error('❌ Order creation returned null/undefined');
+        throw new Error('Order creation failed - no order returned');
       }
     } catch (error) {
       console.error('💥 Error in order creation:', error)
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('💥 Error details for user:', errorMessage);
+      
+      // Show alert with detailed error
+      alert(`Failed to create order: ${errorMessage}`);
     } finally {
       setIsPlacingOrder(false)
     }
