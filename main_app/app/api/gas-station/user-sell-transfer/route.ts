@@ -5,12 +5,12 @@ export async function POST(request: NextRequest) {
   try {
     const { userAddress, adminAddress, usdtAmount, inrAmount, orderType, chainId } = await request.json()
     
-    // Force mainnet validation
     if (chainId !== 56) {
       return NextResponse.json(
         { 
           success: false,
-          error: `Invalid network. Only BSC Mainnet (Chain ID 56) is supported. Received: ${chainId}` 
+          error: `Invalid network. Only BSC Mainnet (Chain ID 56) is supported. Received: ${chainId}`,
+          code: 'INVALID_NETWORK'
         },
         { status: 400 }
       )
@@ -20,7 +20,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           success: false,
-          error: 'Missing required parameters: userAddress, adminAddress, usdtAmount, inrAmount, orderType' 
+          error: 'Missing required parameters',
+          code: 'MISSING_PARAMS' 
         },
         { status: 400 }
       )
@@ -37,43 +38,86 @@ export async function POST(request: NextRequest) {
     
     const gasStation = getGasStation(56)
     
-    // Check Gas Station status
-    const status = await gasStation.checkGasStationStatus()
-    if (!status.isReady) {
+    try {
+      console.log('🚀 Executing Gas Station transfer (Gas Station pays ALL gas fees)...')
+      
+      const txHash = await gasStation.userSellOrderViaGasStation(
+        userAddress as `0x${string}`,
+        adminAddress as `0x${string}`,
+        usdtAmount,
+        inrAmount,
+        orderType
+      )
+      
+      console.log('✅ Gas Station user sell transfer successful (BSC Mainnet):', txHash)
+      
+      return NextResponse.json({
+        success: true,
+        txHash,
+        chainId: 56,
+        gasStationAddress: gasStation.getAddress(),
+        message: 'Gas Station paid all gas fees for this transfer'
+      })
+      
+    } catch (transferError) {
+      console.error('❌ Gas Station transfer error:', transferError)
+      
+      const errorMessage = transferError instanceof Error ? transferError.message : 'Transfer failed'
+      
+      // 🔥 FIX: Better error handling based on error type
+      if (errorMessage.includes('APPROVAL_REQUIRED')) {
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'User has not approved Gas Station for USDT spending. Please approve Gas Station first.',
+            needsApproval: true,
+            code: 'APPROVAL_REQUIRED'
+          },
+          { status: 400 }
+        )
+      }
+      
+      if (errorMessage.includes('INSUFFICIENT_BALANCE')) {
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'User has insufficient USDT balance for this transaction',
+            code: 'INSUFFICIENT_BALANCE'
+          },
+          { status: 400 }
+        )
+      }
+      
+      if (errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('429')) {
+        return NextResponse.json(
+          { 
+            success: false,
+            error: 'Network temporarily busy. Please try again in a moment.',
+            retryable: true,
+            code: 'NETWORK_BUSY'
+          },
+          { status: 503 }
+        )
+      }
+      
+      // Generic error
       return NextResponse.json(
         { 
           success: false,
-          error: `Gas Station not ready on BSC Mainnet: ${status.error || 'Insufficient BNB balance'}` 
+          error: `Gas Station transfer failed: ${errorMessage}`,
+          code: 'TRANSFER_FAILED'
         },
-        { status: 503 }
+        { status: 500 }
       )
     }
     
-    // Execute user sell transfer via Gas Station
-    const txHash = await gasStation.userSellOrderViaGasStation(
-      userAddress as `0x${string}`,
-      adminAddress as `0x${string}`,
-      usdtAmount,
-      inrAmount,
-      orderType
-    )
-    
-    console.log('✅ Gas Station user sell transfer successful (BSC Mainnet):', txHash)
-    
-    return NextResponse.json({
-      success: true,
-      txHash,
-      chainId: 56,
-      gasStationAddress: status.address,
-      message: 'User sell transfer completed via Gas Station on BSC Mainnet'
-    })
-    
   } catch (error) {
-    console.error('❌ Gas Station user sell transfer error:', error)
+    console.error('❌ Gas Station user sell transfer API error:', error)
     return NextResponse.json(
       { 
         success: false,
-        error: error instanceof Error ? error.message : 'User sell transfer failed' 
+        error: 'Internal server error',
+        code: 'INTERNAL_ERROR'
       },
       { status: 500 }
     )

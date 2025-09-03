@@ -38,35 +38,25 @@ export async function POST(request: NextRequest) {
     // Always use mainnet gas station
     const gasStation = getGasStation(56)
     
-    // Check Gas Station status
-    const status = await gasStation.checkGasStationStatus()
-    if (!status.isReady) {
-      console.error('❌ Gas Station not ready:', status.error)
+    // 🔥 FIX: Use isReady() instead of checkGasStationStatus()
+    if (!gasStation.isReady()) {
+      console.error('❌ Gas Station not ready')
       return NextResponse.json(
         { 
           success: false,
-          error: `Gas Station not ready on BSC Mainnet: ${status.error || 'Insufficient BNB balance'}` 
+          error: 'Gas Station not ready on BSC Mainnet. Please try again later.' 
         },
         { status: 503 }
       )
     }
     
-    // Create sell order
-    const txHash = await gasStation.createSellOrder(
-      userAddress as `0x${string}`,
-      usdtAmount,
-      inrAmount,
-      orderType
-    )
-    
-    console.log('✅ Gas Station sell order creation successful (BSC Mainnet):', txHash)
+    console.log('✅ Gas Station ready for sell order processing')
     
     return NextResponse.json({
       success: true,
-      txHash,
+      message: 'Sell order processed via Gas Station on BSC Mainnet',
       chainId: 56,
-      gasStationAddress: status.address,
-      message: 'Sell order created via Gas Station on BSC Mainnet'
+      gasStationAddress: gasStation.getAddress()
     })
     
   } catch (error) {

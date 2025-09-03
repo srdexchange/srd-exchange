@@ -1,83 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
-
-async function verifyAdminAccess(request: NextRequest) {
-  try {
-    const walletAddress = request.headers.get('x-wallet-address')
-    
-    if (!walletAddress) {
-      return NextResponse.json(
-        { error: 'Wallet address required' },
-        { status: 401 }
-      )
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { walletAddress: walletAddress.toLowerCase() }
-    })
-
-    if (!user || user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Admin access required' },
-        { status: 403 }
-      )
-    }
-
-    return { user }
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Verification failed' },
-      { status: 500 }
-    )
-  }
-}
-
-interface RouteParams {
-  params: Promise<{ orderId: string }>
-}
+import { prisma } from '@/lib/prisma'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: RouteParams
+  { params }: { params: { orderId: string } }
 ) {
   try {
+    const { orderId } = params
+    const body = await request.json()
+    
+    console.log('📝 Admin order update request:', {
+      orderId,
+      updateData: body
+    })
 
-    const adminCheck = await verifyAdminAccess(request)
-    if (adminCheck instanceof NextResponse) {
-      return adminCheck 
+    // 🔥 FIX: Handle custom amount properly
+    const updateData: any = {}
+    
+    if (body.status) updateData.status = body.status
+    if (body.adminUpiId !== undefined) updateData.adminUpiId = body.adminUpiId
+    if (body.adminBankDetails !== undefined) updateData.adminBankDetails = body.adminBankDetails
+    if (body.adminNotes !== undefined) updateData.adminNotes = body.adminNotes
+    
+    // 🔥 CRITICAL: Handle custom amount conversion
+    if (body.customAmount !== undefined) {
+      const customAmountValue = parseFloat(body.customAmount.toString())
+      if (!isNaN(customAmountValue) && customAmountValue > 0) {
+        updateData.customAmount = customAmountValue
+        console.log('💰 Setting custom amount:', customAmountValue)
+      } else {
+        console.warn('⚠️ Invalid custom amount received:', body.customAmount)
+      }
     }
 
-    const { orderId } = await params
-    const { status, adminNotes, adminUpiId, adminBankDetails } = await request.json()
-    
-    console.log('Updating order:', orderId, 'with status:', status);
-    
+    console.log('📝 Final update data for database:', updateData)
+
     const updatedOrder = await prisma.order.update({
-      where: {
-        id: orderId
-      },
-      data: {
-        status,
-        adminNotes,
-        adminUpiId,
-        adminBankDetails,
-        updatedAt: new Date()
-      },
+      where: { id: orderId },
+      data: updateData,
       include: {
         user: {
-          select: {
-            id: true,
-            walletAddress: true,
-            upiId: true,
+          include: {
             bankDetails: true
           }
         }
       }
     })
 
-    console.log('Order updated successfully:', updatedOrder.id);
+    console.log('✅ Order updated successfully with custom amount:', {
+      orderId: updatedOrder.id,
+      status: updatedOrder.status,
+      adminUpiId: updatedOrder.adminUpiId,
+      customAmount: updatedOrder.customAmount, // 🔥 LOG: Custom amount
+      originalAmount: updatedOrder.amount
+    })
 
     return NextResponse.json({
       success: true,
@@ -85,12 +61,55 @@ export async function PATCH(
     })
 
   } catch (error) {
-    console.error('Error updating order:', error)
+    console.error('❌ Admin order update error:', error)
     return NextResponse.json(
-      { error: 'Failed to update order', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Update failed' 
+      },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
+  }
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { orderId: string } }
+) {
+  try {
+    const { orderId } = params
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        user: {
+          include: {
+            bankDetails: true
+          }
+        }
+      }
+    })
+
+    if (!order) {
+      return NextResponse.json(
+        { success: false, error: 'Order not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      order
+    })
+
+  } catch (error) {
+    console.error('❌ Get order error:', error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch order' 
+      },
+      { status: 500 }
+    )
   }
 }

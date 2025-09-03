@@ -16,13 +16,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useModalState } from "@/hooks/useModalState";
 import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
 import { useWalletManager } from '@/hooks/useWalletManager'
+import { useUSDTCalculation } from '@/lib/utils/calculateUSDT'
 
 interface BuyUPIModalProps {
   isOpen: boolean;
   onClose: () => void;
   amount: string;
   usdtAmount: string;
-  orderData?: any; // New prop for order data
+  orderData?: any;
 }
 
 
@@ -55,6 +56,7 @@ export default function BuyUPIModal({
   const displayAmount = paymentDetails?.customAmount?.toString() || amount;
 
   const { confirmOrderReceivedOnChain } = useWalletManager()
+  const { calculateUSDTFromINR } = useUSDTCalculation()
 
   // Load saved state when modal opens
   useEffect(() => {
@@ -313,29 +315,40 @@ export default function BuyUPIModal({
                 )}
 
                 <div className="mb-6">
-
+                  {/* Primary Amount - Show custom amount when admin provides it */}
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
-                    {displayAmount}₹
+                    {hasReceivedAdminDetails && paymentDetails?.customAmount 
+                      ? `₹${paymentDetails.customAmount}` 
+                      : `₹${displayAmount}`
+                    }
                   </div>
                   
                   {/* Secondary Amount - USDT equivalent when admin accepts */}
                   {hasReceivedAdminDetails && (
                     <div className="text-2xl md:text-2xl font-medium text-gray-300 mb-2">
-                      ≈ {usdtAmount} USDT
+                      ≈ {paymentDetails?.customAmount 
+                          ? calculateUSDTFromINR(paymentDetails.customAmount, 'UPI')
+                          : usdtAmount
+                        } USDT
                     </div>
                   )}
                   
-                  {/* Custom amount label */}
-                  {hasReceivedAdminDetails && displayAmount !== amount && (
+                  {/* Custom amount label - Only show if amount is different from original */}
+                  {hasReceivedAdminDetails && paymentDetails?.customAmount && 
+                   paymentDetails.originalAmount && 
+                   Math.abs(paymentDetails.customAmount - paymentDetails.originalAmount) > 0.01 && (
                     <div className="text-sm text-green-400 mb-2">
-                      (Custom amount set by admin)
+                      ✨ Custom amount set by admin (Original: ₹{paymentDetails.originalAmount})
                     </div>
                   )}
                   
                   {/* Conversion Info */}
                   {hasReceivedAdminDetails && (
                     <div className="text-xs text-gray-400 mb-2">
-                      You will receive {usdtAmount} USDT for ₹{displayAmount}
+                      You will receive {paymentDetails?.customAmount 
+                        ? calculateUSDTFromINR(paymentDetails.customAmount, 'UPI')
+                        : usdtAmount
+                      } USDT for ₹{paymentDetails?.customAmount || displayAmount}
                     </div>
                   )}
                   
@@ -377,12 +390,18 @@ export default function BuyUPIModal({
                 {hasReceivedAdminDetails && !isWaitingConfirmation && !isPaid && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
-                      Please pay {displayAmount}₹ to admin's UPI ID
+                      Please pay ₹{paymentDetails?.customAmount || displayAmount} to admin's UPI ID
                     </div>
                     <div className="text-[#26AF6C] text-xs flex items-center justify-center mb-4">
                       <TriangleAlert className="w-3 h-3 mr-1" />
                       Pay only to the admin's UPI ID provided below
                     </div>
+                    {/* Show rate information */}
+                    {paymentDetails?.customAmount && (
+                      <div className="text-xs text-gray-400 text-center">
+                        You get {calculateUSDTFromINR(paymentDetails.customAmount, 'UPI')} USDT
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -479,7 +498,7 @@ export default function BuyUPIModal({
                       ) : hasReceivedAdminDetails ? (
                         <>
                           <CreditCard className="w-5 h-5" />
-                          <span>I Paid {displayAmount}₹ To Admin</span>
+                          <span>I Paid ₹{paymentDetails?.customAmount || displayAmount} To Admin</span>
                         </>
                       ) : (
                         <>

@@ -189,6 +189,15 @@ export default function AdminCenter() {
     [orderIndex: number]: "none" | "approving" | "approved" | "failed";
   }>({});
 
+  // Add state for user money received notifications at the top of the component:
+  const [userMoneyNotifications, setUserMoneyNotifications] = useState<{
+    [orderId: string]: {
+      message: string;
+      timestamp: Date;
+      amount: string;
+    }
+  }>({});
+
   // Force BSC mainnet check
   useEffect(() => {
     if (chainId && chainId !== 56) {
@@ -264,6 +273,45 @@ export default function AdminCenter() {
       window.dispatchEvent(new CustomEvent("adminOrderDeselected"));
     }
   }, [selectedOrder]);
+
+  // Add useEffect to listen for user money received events:
+  useEffect(() => {
+    const handleUserReceivedMoney = (event: CustomEvent) => {
+      const { orderId, orderType, amount, timestamp } = event.detail;
+      
+      console.log('💰 User received money notification:', {
+        orderId,
+        orderType,
+        amount,
+        timestamp
+      });
+      
+      // Add notification for this order
+      setUserMoneyNotifications(prev => ({
+        ...prev,
+        [orderId]: {
+          message: "User got money in the bank",
+          timestamp: new Date(timestamp),
+          amount: amount
+        }
+      }));
+      
+      // Auto-remove notification after 30 seconds
+      setTimeout(() => {
+        setUserMoneyNotifications(prev => {
+          const newNotifications = { ...prev };
+          delete newNotifications[orderId];
+          return newNotifications;
+        });
+      }, 30000);
+    };
+
+    window.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+
+    return () => {
+      window.removeEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+    };
+  }, []);
 
   const fetchAcceptedOrders = async () => {
     if (!address) {
@@ -389,55 +437,61 @@ export default function AdminCenter() {
   // Update the approval function
   const approveAdminUSDT = async (orderIndex: number): Promise<boolean> => {
     if (!address || chainId !== 56) return false;
-
+  
     try {
       setAdminApprovalState((prev) => ({
         ...prev,
         [orderIndex]: "approving",
       }));
-
+  
       const order = orders[orderIndex];
+      const buyRate = getBuyRate(order.currency as "UPI" | "CDM");
+      
+      // 🔥 FIX: Calculate actual USDT amount for this order
       const usdtAmountToTransfer = order.usdtAmount
         ? order.usdtAmount.toString()
-        : (order.amount / getBuyRate(order.currency as "UPI" | "CDM")).toFixed(6);
-
+        : (order.amount / buyRate).toFixed(6);
+  
       console.log("🔓 Admin approving USDT for Gas Station address...", {
         adminAddress: address,
-        requiredAmount: usdtAmountToTransfer,
+        orderAmountINR: order.amount,
+        usdtAmountNeeded: usdtAmountToTransfer,
+        buyRate,
         gasStationAddress: "0x1dA2b030808D46678284dB112bfe066AA9A8be0E"
       });
-
+  
       const GAS_STATION_ADDRESS = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
       
-      const approveAmount = "500000000"; // 10M USDT
-
+      // Approve a large amount (1M USDT) for multiple future transactions
+      const approveAmount = "1000000"; // 1M USDT
+  
       console.log("🔓 Approving large amount for multiple future transactions:", {
         approveAmount,
         gasStation: GAS_STATION_ADDRESS
       });
-
+  
       await approveUSDT(
         GAS_STATION_ADDRESS as `0x${string}`,
         approveAmount
       );
-
+  
       console.log("⏳ Waiting for Gas Station approval transaction...");
-      await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait longer
-
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+  
       // Verify approval worked
       const isApproved = await checkAdminApproval(orderIndex);
-
+  
       setAdminApprovalState((prev) => ({
         ...prev,
         [orderIndex]: isApproved ? "approved" : "failed",
       }));
-
+  
       if (isApproved) {
         console.log("✅ Gas Station USDT approval successful");
       } else {
         console.error("❌ Gas Station approval verification failed");
       }
-
+  
       return isApproved;
     } catch (error) {
       console.error("❌ Gas Station USDT approval failed:", error);
@@ -452,19 +506,25 @@ export default function AdminCenter() {
   // Update the approval check function
   const checkAdminApproval = async (orderIndex: number): Promise<boolean> => {
     if (!address || chainId !== 56) return false;
-
+  
     try {
       const order = orders[orderIndex];
-      const usdtAmountWei = parseUnits(
-        order.usdtAmount
-          ? order.usdtAmount.toString()
-          : (order.amount / getBuyRate(order.currency as "UPI" | "CDM")).toFixed(6),
-        6
-      );
-
-      // 🔥 FIX: Check allowance for Gas Station address
+      const buyRate = getBuyRate(order.currency as "UPI" | "CDM");
+      
+      // 🔥 FIX: Calculate the actual USDT amount needed
+      let usdtAmountNeeded: string;
+      
+      if (order.usdtAmount) {
+        usdtAmountNeeded = order.usdtAmount.toString();
+      } else {
+        usdtAmountNeeded = (order.amount / buyRate).toFixed(6);
+      }
+  
+      // 🔥 FIX: Use 18 decimals for BSC USDT, not 6
+      const usdtAmountWei = parseUnits(usdtAmountNeeded, 18); // BSC USDT uses 18 decimals
+  
       const GAS_STATION_ADDRESS = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
-
+  
       const currentAllowance = await readContract(config as any, {
         address: CONTRACTS.USDT[56],
         abi: [
@@ -480,22 +540,26 @@ export default function AdminCenter() {
           },
         ],
         functionName: "allowance",
-        args: [address, GAS_STATION_ADDRESS], // Check Gas Station allowance
+        args: [address, GAS_STATION_ADDRESS],
       });
-
+  
       console.log("🔍 Admin approval check for Gas Station:", {
-        required: formatUnits(usdtAmountWei, 6),
-        approved: formatUnits(currentAllowance, 6),
+        orderAmountINR: order.amount,
+        usdtAmountNeeded,
+        required: formatUnits(usdtAmountWei, 18),
+        approved: formatUnits(currentAllowance, 18),
         sufficient: currentAllowance >= usdtAmountWei,
-        gasStationAddress: GAS_STATION_ADDRESS
+        gasStationAddress: GAS_STATION_ADDRESS,
+        buyRate
       });
-
+  
       return currentAllowance >= usdtAmountWei;
     } catch (error) {
       console.error("❌ Error checking Gas Station approval:", error);
       return false;
     }
   };
+  
 
   // Update the approval strategy
   const handleButtonClick = async (orderIndex: number, tag: string) => {
@@ -529,24 +593,52 @@ export default function AdminCenter() {
 
         // Update the buy order handling with approval check
         if (order.orderType.includes("BUY")) {
-          console.log(
-            "💰 BUY ORDER: Processing via Gas Station on BSC Mainnet..."
-          );
+          console.log("💰 BUY ORDER: Processing via Gas Station on BSC Mainnet...");
 
           try {
             const buyRate = getBuyRate(order.currency as "UPI" | "CDM");
-            const usdtAmountToTransfer = order.usdtAmount
-              ? order.usdtAmount.toString()
-              : (order.amount / buyRate).toFixed(6);
+            
+            // 🔥 FIX: Calculate correct USDT amount based on actual order
+            let usdtAmountToTransfer: string;
+            
+            if (order.usdtAmount) {
+              // Use the stored USDT amount if available
+              usdtAmountToTransfer = order.usdtAmount.toString();
+            } else {
+              // Calculate USDT amount from INR amount using the rate
+              usdtAmountToTransfer = (order.amount / buyRate).toFixed(6);
+            }
 
             console.log("📊 Buy order transfer details (BSC Mainnet):", {
-              orderAmount: order.amount,
+              orderAmountINR: order.amount,
               usdtAmountToTransfer,
               buyRate,
               orderType: order.orderType,
               useGasStation: true,
               chainId: 56,
+              calculation: `${order.amount} INR ÷ ${buyRate} rate = ${usdtAmountToTransfer} USDT`
             });
+
+            // 🔥 IMPORTANT: Validate the calculated amount
+            const transferAmount = parseFloat(usdtAmountToTransfer);
+            if (transferAmount <= 0 || isNaN(transferAmount)) {
+              throw new Error(`Invalid USDT transfer amount calculated: ${usdtAmountToTransfer}`);
+            }
+
+            if (transferAmount > 1000) { // Safety check for large amounts
+              const confirmLargeTransfer = confirm(
+                `⚠️ LARGE TRANSFER CONFIRMATION\n\n` +
+                `You are about to transfer ${usdtAmountToTransfer} USDT\n` +
+                `Order Amount: ₹${order.amount}\n` +
+                `Rate: ₹${buyRate}/USDT\n\n` +
+                `Click OK to confirm this transfer`
+              );
+              
+              if (!confirmLargeTransfer) {
+                console.log("❌ Large transfer cancelled by admin");
+                return;
+              }
+            }
 
             // Step 1: Check if admin has sufficient USDT allowance
             console.log("🔍 Step 1: Checking admin USDT allowance...");
@@ -558,12 +650,12 @@ export default function AdminCenter() {
               // Show one-time approval modal
               const shouldApprove = confirm(
                 `🔐 ONE-TIME SETUP REQUIRED\n\n` +
-                  `To enable Gas Station transfers, you need to approve USDT spending once.\n\n` +
-                  `✅ You pay gas for this approval (~$0.20)\n` +
-                  `✅ Gas Station pays gas for all future transfers\n` +
-                  `✅ Approving 1,000,000 USDT for future orders\n\n` +
-                  `Current order: ${usdtAmountToTransfer} USDT\n\n` +
-                  `Click OK to approve (one-time only)`
+                `To enable Gas Station transfers, you need to approve USDT spending once.\n\n` +
+                `✅ You pay gas for this approval (~$0.20)\n` +
+                `✅ Gas Station pays gas for all future transfers\n` +
+                `✅ Approving 1,000,000 USDT for future orders\n\n` +
+                `Current order: ${usdtAmountToTransfer} USDT (₹${order.amount})\n\n` +
+                `Click OK to approve (one-time only)`
               );
 
               if (!shouldApprove) {
@@ -580,12 +672,9 @@ export default function AdminCenter() {
                 },
               }));
 
-              console.log(
-                "🔓 Admin performing one-time USDT approval (admin pays gas)..."
-              );
+              console.log("🔓 Admin performing one-time USDT approval (admin pays gas)...");
 
               try {
-                // Large approval amount (1M USDT) for future transactions
                 await approveAdminUSDT(orderIndex);
 
                 console.log("⏳ Waiting for admin approval transaction...");
@@ -608,15 +697,10 @@ export default function AdminCenter() {
                   },
                 }));
 
-                const errorMessage =
-                  approvalError instanceof Error
-                    ? approvalError.message
-                    : String(approvalError);
+                const errorMessage = approvalError instanceof Error ? approvalError.message : String(approvalError);
 
                 if (errorMessage.includes("User rejected")) {
-                  throw new Error(
-                    "Approval cancelled by user. Please approve USDT spending to continue."
-                  );
+                  throw new Error("Approval cancelled by user. Please approve USDT spending to continue.");
                 } else {
                   throw new Error(`USDT approval failed: ${errorMessage}`);
                 }
@@ -624,26 +708,21 @@ export default function AdminCenter() {
             }
 
             // Step 2: Now Gas Station executes the transfer (Gas Station pays gas)
-            console.log(
-              "🚀 Step 2: Gas Station executing transfer (Gas Station pays gas)..."
-            );
+            console.log(`🚀 Step 2: Gas Station executing transfer of ${usdtAmountToTransfer} USDT (Gas Station pays gas)...`);
 
+            // 🔥 FIX: Pass the calculated USDT amount, not hardcoded "1"
             await transferUSDT(
               order.user.walletAddress as `0x${string}`,
-              usdtAmountToTransfer,
+              usdtAmountToTransfer, // Use calculated amount instead of hardcoded "1"
               true // Use Gas Station
             );
 
-            console.log(
-              "⏳ Waiting for Gas Station transaction confirmation..."
-            );
+            console.log("⏳ Waiting for Gas Station transaction confirmation...");
             await new Promise((resolve) => setTimeout(resolve, 8000));
 
             await updateOrderStatus(order.fullId, "PAYMENT_VERIFIED");
 
-            console.log(
-              "✅ Buy order completed - Admin approved once, Gas Station paid gas for transfer"
-            );
+            console.log(`✅ Buy order completed - Transferred ${usdtAmountToTransfer} USDT via Gas Station`);
 
             setOrderStatuses((prev) => ({
               ...prev,
@@ -924,6 +1003,15 @@ export default function AdminCenter() {
     };
   }, [selectedOrder]);
 
+  // Add function to manually dismiss notification:
+  const dismissNotification = (orderId: string) => {
+    setUserMoneyNotifications(prev => {
+      const newNotifications = { ...prev };
+      delete newNotifications[orderId];
+      return newNotifications;
+    });
+  };
+
   console.log("Admin Center State:", {
     loading,
     ordersCount: orders.length,
@@ -1028,6 +1116,9 @@ export default function AdminCenter() {
               rateDisplay = `₹${sellRate}/USDT`;
             }
 
+            // 🔥 ADD: Check if this order has a user money notification
+            const hasUserMoneyNotification = userMoneyNotifications[order.fullId || order.id];
+
             return (
               <div
                 key={order.fullId}
@@ -1055,6 +1146,33 @@ export default function AdminCenter() {
                     >
                       Deselect
                     </button>
+                  </div>
+                )}
+
+                {/* 🔥 ADD: User Money Received Notification - Only for SELL orders */}
+                {hasUserMoneyNotification && order.orderType.includes('SELL') && (
+                  <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg animate-pulse">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce"></div>
+                        <span className="text-green-400 font-medium text-sm">
+                          💰 {hasUserMoneyNotification.message}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissNotification(order.fullId || order.id);
+                        }}
+                        className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="text-xs text-green-300 mt-1">
+                      Amount: ₹{hasUserMoneyNotification.amount} • 
+                      Time: {hasUserMoneyNotification.timestamp.toLocaleTimeString()}
+                    </div>
                   </div>
                 )}
 

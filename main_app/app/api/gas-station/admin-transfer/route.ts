@@ -37,18 +37,19 @@ export async function POST(request: NextRequest) {
     // Always use mainnet gas station
     const gasStation = getGasStation(56)
     
-    // Check Gas Station status
-    const status = await gasStation.checkGasStationStatus()
-    if (!status.isReady) {
-      console.error('❌ Gas Station not ready:', status.error)
+    // 🔥 FIX: Use isReady() instead of checkGasStationStatus()
+    if (!gasStation.isReady()) {
+      console.error('❌ Gas Station not ready on BSC Mainnet')
       return NextResponse.json(
         { 
           success: false,
-          error: `Gas Station not ready on BSC Mainnet: ${status.error || 'Unknown error'}` 
+          error: 'Gas Station not ready on BSC Mainnet. Please try again later.' 
         },
         { status: 503 }
       )
     }
+    
+    console.log('✅ Gas Station is ready, executing admin USDT transfer...')
     
     // Execute transfer
     const txHash = await gasStation.adminTransferUSDT(
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
       success: true,
       txHash,
       chainId: 56,
+      gasStationAddress: gasStation.getAddress(),
       message: 'USDT transfer completed via Gas Station on BSC Mainnet'
     })
     

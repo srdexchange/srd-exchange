@@ -121,11 +121,41 @@ export default function SellUPIModal({
       }
       setIsMoneyReceived(true);
       setIsCoinSent(true);
+      
+      // 🔥 ADD: Broadcast event to admin center
+      if (orderData) {
+        window.dispatchEvent(new CustomEvent('userReceivedMoney', {
+          detail: {
+            orderId: orderData.fullId || orderData.id,
+            orderType: orderData.orderType,
+            amount: displayRupeeAmount,
+            timestamp: new Date().toISOString()
+          }
+        }));
+        
+        console.log('📢 Broadcasted user money received event:', {
+          orderId: orderData.fullId || orderData.id,
+          amount: displayRupeeAmount
+        });
+      }
+      
       console.log("💰 Money Received on Account clicked");
     } catch (error) {
       console.error('❌ Error completing sell order on blockchain:', error);
       setIsMoneyReceived(true);
       setIsCoinSent(true);
+      
+      // Still broadcast event even if blockchain operation fails
+      if (orderData) {
+        window.dispatchEvent(new CustomEvent('userReceivedMoney', {
+          detail: {
+            orderId: orderData.fullId || orderData.id,
+            orderType: orderData.orderType,
+            amount: displayRupeeAmount,
+            timestamp: new Date().toISOString()
+          }
+        }));
+      }
     }
   };
 
@@ -213,7 +243,7 @@ export default function SellUPIModal({
 
                   {/* Blockchain Status for Sell Orders */}
                   {orderData && orderData.orderType.includes('SELL') && (
-                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div className="mb-4 p-3 rounded-lg">
                       <div className="text-sm text-green-400 font-medium mb-1">
                         ✅ USDT Secured in Smart Contract
                       </div>
@@ -277,7 +307,7 @@ export default function SellUPIModal({
                 </div>
 
                 {orderData && (
-                  <div className="mb-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="mb-6 p-3  rounded-lg">
                     <div className="text-sm text-blue-400 font-medium mb-1">
                       Order Status: {orderData.status || 'PENDING'}
                     </div>
@@ -309,13 +339,18 @@ export default function SellUPIModal({
                     <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
                       <div className="bg-[#622DBF] h-2 rounded-full w-3/4"></div>
                     </div>
-                    {/* <div className="text-white text-sm font-medium">
-                      14 : 34 Left
-                    </div> */}
+                    
                   </div>
                 )}
 
                 <div className="px-4 md:px-0">
+                {isWaitingConfirmation && !isMoneyReceived && (
+                    <div className="mb-4 p-3 rounded-lg">
+                      <div className="text-sm text-yellow-400 font-medium text-center">
+                        ⚠️ Only press the button below when you can confirm that you got money in your bank account
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={
                       isMoneyReceived

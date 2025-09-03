@@ -53,6 +53,14 @@ export default function AdminRight() {
   // Custom amount
   const [customAmount, setCustomAmount] = useState('')
 
+  // 🔥 ADD: State for user money received notifications
+  const [userMoneyNotification, setUserMoneyNotification] = useState<{
+    orderId: string;
+    message: string;
+    amount: string;
+    timestamp: Date;
+  } | null>(null)
+
   const { rates, loading, refetch } = useRates()
   const { updateRates, loading: updating, error: updateError } = useAdminRates()
   const { makeAdminRequest } = useAdminAPI()
@@ -116,7 +124,55 @@ export default function AdminRight() {
     setUpdateSuccess(false)
   }, [activeTab])
 
+  useEffect(() => {
+    const handleUserReceivedMoney = (event: CustomEvent) => {
+      const { orderId, orderType, amount, timestamp } = event.detail;
+      
+      console.log('💰 User received money notification in admin right:', {
+        orderId,
+        orderType,
+        amount,
+        timestamp
+      });
+      
+      // Only show notification if this is the currently selected order and it's a SELL order
+      if (selectedOrder && 
+          (selectedOrder.fullId === orderId || selectedOrder.id === orderId) && 
+          orderType.includes('SELL')) {
+        
+        setUserMoneyNotification({
+          orderId,
+          message: "User got money in bank",
+          amount: amount,
+          timestamp: new Date(timestamp)
+        });
+        
+        console.log('📢 Showing user money notification for selected order:', orderId);
+        
+        // Auto-remove notification after 15 seconds
+        setTimeout(() => {
+          setUserMoneyNotification(null);
+        }, 15000);
+      }
+    };
 
+    window.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+
+    return () => {
+      window.removeEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+    };
+  }, [selectedOrder]); // Include selectedOrder in dependency array
+
+  // 🔥 ADD: Clear notification when order changes
+  useEffect(() => {
+    // Clear notification when order selection changes
+    setUserMoneyNotification(null);
+  }, [selectedOrder]);
+
+  // Add function to manually dismiss notification
+  const dismissUserMoneyNotification = () => {
+    setUserMoneyNotification(null);
+  };
 
   const handleUpdatePrice = async () => {
     if (!newBuyRate || !newSellRate) {
@@ -173,12 +229,10 @@ export default function AdminRight() {
     setSendingPaymentDetails(true);
 
     try {
-    
       const orderId = selectedOrder.fullId || selectedOrder.id;
-
       const trimmedUpiId = adminUpiId.trim();
       
-   
+      // Validate inputs
       if (paymentMethod === 'BUY_UPI') {
         if (!trimmedUpiId || trimmedUpiId.length === 0) {
           alert('Please enter a valid UPI ID');
@@ -188,7 +242,6 @@ export default function AdminRight() {
         console.log('✅ UPI ID validation passed:', trimmedUpiId);
       }
       
-      // For CDM orders, only validate UPI ID (not bank details)
       if (paymentMethod === 'BUY_CDM') {
         if (!trimmedUpiId || trimmedUpiId.length === 0) {
           alert('Please enter a valid UPI ID for ₹500 verification');
@@ -198,17 +251,31 @@ export default function AdminRight() {
         console.log('✅ CDM UPI ID validation passed:', trimmedUpiId);
       }
       
+      // 🔥 FIX: Parse custom amount properly
+      const customAmountValue = parseFloat(customOrderValue);
+      if (isNaN(customAmountValue) || customAmountValue <= 0) {
+        alert('Please enter a valid custom amount');
+        setSendingPaymentDetails(false);
+        return;
+      }
+
+      console.log('💰 Custom amount validation:', {
+        originalAmount: selectedOrder.amount,
+        customOrderValue,
+        parsedCustomAmount: customAmountValue
+      });
 
       const paymentDetailsUpdate = {
         status: 'ADMIN_APPROVED',
         adminUpiId: trimmedUpiId,
-       
         adminBankDetails: paymentMethod === 'BUY_UPI' ? null : null,
         adminNotes: paymentMethod === 'BUY_CDM' 
-          ? `UPI ID provided for ₹500 verification. Amount: ${customOrderValue}` 
-          : `Payment details provided. Amount: ${customOrderValue}`,
-        amount: parseFloat(customOrderValue) || selectedOrder.amount
+          ? `UPI ID provided for ₹500 verification. Custom amount: ₹${customAmountValue}` 
+          : `Payment details provided. Custom amount: ₹${customAmountValue}`,
+        customAmount: customAmountValue // 🔥 ADD: Include custom amount in update
       };
+
+      console.log('📝 Sending payment details update:', paymentDetailsUpdate);
 
       // Update order in database with admin payment details
       const updateResponse = await makeAdminRequest(`/api/admin/orders/${orderId}`, {
@@ -226,7 +293,10 @@ export default function AdminRight() {
         setUpdateSuccess(true);
         setTimeout(() => setUpdateSuccess(false), 3000);
         
-        console.log('🎉 Payment details saved to database successfully!');
+        console.log('🎉 Payment details with custom amount saved successfully!', {
+          customAmount: customAmountValue,
+          adminUpiId: trimmedUpiId
+        });
         
         // Clear UPI field after sending
         setAdminUpiId('');
@@ -461,6 +531,36 @@ export default function AdminRight() {
       {/* Selected Order Info */}
       {selectedOrder ? (
         <>
+          {/* 🔥 ADD: User Money Received Notification - Only for SELL orders */}
+          {userMoneyNotification && selectedOrder.orderType.includes('SELL') && (
+            <div className="bg-[#101010] border border-green-500/50 rounded-md p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce"></div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-green-400 font-montserrat">
+                      💰 {userMoneyNotification.message}
+                    </h3>
+                    <p className="text-sm text-green-300 font-montserrat">
+                      Order: {userMoneyNotification.orderId.slice(-8)} • 
+                      Amount: ₹{userMoneyNotification.amount} • 
+                      Time: {userMoneyNotification.timestamp.toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={dismissUserMoneyNotification}
+                  className="text-green-300 hover:text-white text-xs px-3 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors font-montserrat"
+                >
+                  ✕ Dismiss
+                </button>
+              </div>
+              <div className="mt-3 p-2 bg-green-500/10 rounded text-xs text-green-200 font-montserrat">
+                <strong>User confirmed:</strong> They have received ₹{userMoneyNotification.amount} in their bank account for this sell order.
+              </div>
+            </div>
+          )}
+
           {/* Order Info Section with Custom Value */}
           <div className="bg-[#101010] border border-[#3E3E3E] rounded-md p-4">
             <div className="flex items-center justify-between mb-4">
@@ -1017,6 +1117,44 @@ export default function AdminRight() {
           </div>
         </div>
       )}
+
+      {/* 🔥 ADD: Floating User Money Notification */}
+      <AnimatePresence>
+        {userMoneyNotification && selectedOrder?.orderType.includes('SELL') && (
+          <motion.div
+            className="fixed top-4 right-4 z-50 max-w-sm"
+            initial={{ opacity: 0, x: 300, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 300, scale: 0.8 }}
+            transition={{ type: "spring", duration: 0.5 }}
+          >
+            <div className="bg-green-600 border border-green-500 rounded-lg p-4 shadow-2xl">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-white rounded-full animate-bounce"></div>
+                  <h4 className="text-white font-bold font-montserrat">
+                    💰 {userMoneyNotification.message}
+                  </h4>
+                </div>
+                <button
+                  onClick={dismissUserMoneyNotification}
+                  className="text-white hover:text-gray-200 text-lg"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="text-sm text-green-100 font-montserrat">
+                <div>Order: {userMoneyNotification.orderId.slice(-8)}</div>
+                <div>Amount: ₹{userMoneyNotification.amount}</div>
+                <div>Time: {userMoneyNotification.timestamp.toLocaleTimeString()}</div>
+              </div>
+              <div className="mt-2 text-xs text-green-50 bg-green-700/30 rounded p-2 font-montserrat">
+                User confirmed they received money in their bank account.
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

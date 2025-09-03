@@ -1,55 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-interface RouteParams {
-  params: Promise<{ orderId: string }>;
-}
-
 export async function GET(
   request: NextRequest,
-  { params }: RouteParams
+  { params }: { params: { orderId: string } }
 ) {
   try {
-    const { orderId } = await params;
+    const { orderId } = params;
 
-    if (!orderId) {
-      return NextResponse.json(
-        { success: false, error: 'Order ID is required' },
-        { status: 400 }
-      );
-    }
+    console.log('🔍 Fetching payment details for order:', orderId);
 
-    // Fetch order with admin payment details
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
         id: true,
+        status: true,
         adminUpiId: true,
         adminBankDetails: true,
-        amount: true,
-        status: true,
-        orderType: true,
+        adminNotes: true,
+        customAmount: true, 
+        amount: true, // Include original amount for comparison
         updatedAt: true
       }
     });
 
     if (!order) {
+      console.log('❌ Order not found:', orderId);
       return NextResponse.json(
         { success: false, error: 'Order not found' },
         { status: 404 }
       );
     }
 
-    // Prepare payment details response
+    // Only return payment details if admin has provided them
+    if (!order.adminUpiId && !order.adminBankDetails) {
+      console.log('ℹ️ No payment details available yet for order:', orderId);
+      return NextResponse.json({
+        success: true,
+        paymentDetails: null
+      });
+    }
+
     const paymentDetails = {
-      orderId: order.id,
       adminUpiId: order.adminUpiId,
-      adminBankDetails: order.adminBankDetails ? JSON.parse(order.adminBankDetails) : null,
-      customAmount: Number(order.amount),
+      adminBankDetails: order.adminBankDetails 
+        ? (typeof order.adminBankDetails === 'string' 
+            ? JSON.parse(order.adminBankDetails)
+            : order.adminBankDetails)
+        : null,
+      customAmount: order.customAmount ? parseFloat(order.customAmount.toString()) : null, // 🔥 Parse custom amount properly
+      originalAmount: order.amount ? parseFloat(order.amount.toString()) : null, // 🔥 Parse original amount
       status: order.status,
-      orderType: order.orderType,
-      lastUpdated: order.updatedAt.toISOString()
+      adminNotes: order.adminNotes,
+      lastUpdated: order.updatedAt
     };
+
+    console.log('✅ Payment details found with custom amount:', {
+      orderId,
+      hasUpiId: !!paymentDetails.adminUpiId,
+      hasBankDetails: !!paymentDetails.adminBankDetails,
+      customAmount: paymentDetails.customAmount, // 🔥 LOG: Custom amount
+      originalAmount: paymentDetails.originalAmount
+    });
 
     return NextResponse.json({
       success: true,
@@ -57,12 +69,13 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('Error fetching order payment details:', error);
+    console.error('❌ Payment details fetch error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch payment details' },
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch payment details' 
+      },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

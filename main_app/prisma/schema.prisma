@@ -45,6 +45,7 @@ model Order {
   user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount                Decimal
   usdtAmount            Decimal?
+  customAmount          Decimal?    
   orderType             OrderType
   status                OrderStatus @default(PENDING)
   paymentProof          String?

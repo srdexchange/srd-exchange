@@ -37,25 +37,23 @@ export async function POST(request: NextRequest) {
     
     const gasStation = getGasStation(56)
     
-    // Check Gas Station status
-    const status = await gasStation.checkGasStationStatus()
-    if (!status.isReady) {
+    if (!gasStation.isReady()) {
       return NextResponse.json(
         { 
           success: false,
-          error: `Gas Station not ready on BSC Mainnet: ${status.error || 'Insufficient BNB balance'}` 
+          error: 'Gas Station not ready on BSC Mainnet. Please try again later.' 
         },
         { status: 503 }
       )
     }
     
-    // Execute direct sell transfer
-    const txHash = await gasStation.directSellTransfer(
+    // Execute direct sell transfer using our streamlined userSellOrderViaGasStation
+    const txHash = await gasStation.userSellOrderViaGasStation(
       userAddress as `0x${string}`,
+      adminWallet as `0x${string}`,
       usdtAmount,
-      inrAmount,
-      orderType,
-      adminWallet as `0x${string}`
+      parseFloat(inrAmount.toString()),
+      orderType
     )
     
     console.log('✅ Gas Station direct sell transfer successful (BSC Mainnet):', txHash)
@@ -64,7 +62,7 @@ export async function POST(request: NextRequest) {
       success: true,
       txHash,
       chainId: 56,
-      gasStationAddress: status.address,
+      gasStationAddress: gasStation.getAddress(),
       message: 'Direct sell transfer completed via Gas Station on BSC Mainnet'
     })
     

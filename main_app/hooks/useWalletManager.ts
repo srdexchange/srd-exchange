@@ -642,7 +642,7 @@ export function useWalletManager() {
       from: address,
       to,
       amount,
-      chainId: bsc.id, // Force mainnet
+      chainId: bsc.id,
       useGasStation
     })
     
@@ -656,8 +656,8 @@ export function useWalletManager() {
           body: JSON.stringify({
             adminAddress: address,
             userAddress: to,
-            usdtAmount: amount,
-            chainId: 56 // Force mainnet chainId
+            usdtAmount: amount, // 🔥 This should be the correct amount from admin_center
+            chainId: 56
           })
         })
         
@@ -673,9 +673,10 @@ export function useWalletManager() {
         // Fallback to direct transfer on mainnet
         console.log('⚡ Using direct USDT transfer on BSC Mainnet...')
         
-        const actualDecimals = usdtDecimals ? Number(usdtDecimals) : 6
+        // 🔥 FIX: Use 18 decimals for BSC USDT
+        const actualDecimals = 18; // BSC USDT uses 18 decimals
         const amountWei = parseUnits(amount, actualDecimals)
-        const usdtContract = CONTRACTS.USDT[56] // Force mainnet
+        const usdtContract = CONTRACTS.USDT[56]
         
         // Pre-flight checks
         const adminBalance = await readContract(config as any, {

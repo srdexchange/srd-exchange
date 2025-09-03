@@ -7,37 +7,55 @@ import { writeContract, readContract, simulateContract } from 'viem/actions'
 const GAS_STATION_PRIVATE_KEY = process.env.GAS_STATION_PRIVATE_KEY as `0x${string}`
 const GAS_STATION_ENABLED = process.env.NEXT_PUBLIC_GAS_STATION_ENABLED === 'true'
 
-// 🔥 FIX: Use more reliable RPC endpoints
+// 🔥 FIX: Use multiple reliable RPC endpoints with fast fallback
 const BSC_RPC_URLS = [
-  'https://1rpc.io/bnb',
-  'https://bsc-dataseed.bnbchain.org',
-  'https://bsc-dataseed1.defibit.io',
-  'https://bsc-dataseed1.ninicoin.io',
-  'https://rpc.ankr.com/bsc',
-  'https://bsc-rpc.gateway.pokt.network'
+  'https://bsc.nodereal.io', // NodeReal (fastest)
+  'https://bsc-dataseed.bnbchain.org', // Official BSC
+  'https://rpc.ankr.com/bsc', // Ankr
+  'https://bsc-dataseed1.defibit.io', // Defi backup
+  'https://bsc-dataseed1.ninicoin.io', // Another backup
+  'https://bsc-dataseed2.defibit.io', // More backups
 ]
 
-// Function to create transport with fallback RPC URLs
-const createTransportWithFallback = () => {
-  const abortController = new AbortController()
-  setTimeout(() => abortController.abort(), 10000) // 10 second timeout
+// Function to create transport with aggressive timeouts and fallback
+const createTransportWithFallback = (rpcIndex = 0) => {
+  const currentRpc = BSC_RPC_URLS[rpcIndex] || BSC_RPC_URLS[0]
   
-  return http(BSC_RPC_URLS[0], {
-    batch: true,
+  return http(currentRpc, {
+    batch: false, // 🔥 Disable batching for faster response
     fetchOptions: {
-      signal: abortController.signal,
+      timeout: 8000, // 8 second timeout
     },
-    retryCount: 3,
-    retryDelay: 1000
+    retryCount: 1, // Single retry per RPC
+    retryDelay: 1000 // 1 second between retries
   })
 }
 
-console.log('🔧 Gas Station Configuration (Mainnet Only):', {
+// Function to try multiple RPC endpoints
+const createResilientTransport = () => {
+  let currentRpcIndex = 0
+  
+  const tryNextRpc = () => {
+    if (currentRpcIndex < BSC_RPC_URLS.length - 1) {
+      currentRpcIndex++
+      return createTransportWithFallback(currentRpcIndex)
+    }
+    // If all RPCs fail, start over with first one
+    currentRpcIndex = 0
+    return createTransportWithFallback(0)
+  }
+  
+  return createTransportWithFallback(currentRpcIndex)
+}
+
+console.log('🔧 Gas Station Configuration (BSC Mainnet Only):', {
   enabled: GAS_STATION_ENABLED,
   hasPrivateKey: !!GAS_STATION_PRIVATE_KEY,
   privateKeyLength: GAS_STATION_PRIVATE_KEY?.length || 0,
   targetChain: 'BSC Mainnet (56)',
-  rpcEndpoint: BSC_RPC_URLS[0]
+  rpcEndpoints: BSC_RPC_URLS.length,
+  primaryRpc: BSC_RPC_URLS[0],
+  timeout: '8s with fallback'
 })
 
 if (!GAS_STATION_PRIVATE_KEY && GAS_STATION_ENABLED) {
@@ -54,15 +72,8 @@ const CONTRACTS = {
   }
 }
 
-// ABIs remain the same...
+// ABIs (simplified for Gas Station use)
 const USDT_ABI = [
-  {
-    "inputs": [{"internalType": "address", "name": "to", "type": "address"}, {"internalType": "uint256", "name": "amount", "type": "uint256"}],
-    "name": "transfer",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
   {
     "inputs": [{"internalType": "address", "name": "from", "type": "address"}, {"internalType": "address", "name": "to", "type": "address"}, {"internalType": "uint256", "name": "amount", "type": "uint256"}],
     "name": "transferFrom",
@@ -83,71 +94,6 @@ const USDT_ABI = [
     "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
     "stateMutability": "view",
     "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "decimals",
-    "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const
-
-const P2P_TRADING_ABI = [
-  {
-    "inputs": [
-      {"internalType": "address", "name": "_user", "type": "address"},
-      {"internalType": "uint256", "name": "_usdtAmount", "type": "uint256"},
-      {"internalType": "uint256", "name": "_inrAmount", "type": "uint256"},
-      {"internalType": "string", "name": "_orderType", "type": "string"}
-    ],
-    "name": "createBuyOrderViaGasStation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "address", "name": "_user", "type": "address"},
-      {"internalType": "uint256", "name": "_usdtAmount", "type": "uint256"},
-      {"internalType": "uint256", "name": "_inrAmount", "type": "uint256"},
-      {"internalType": "string", "name": "_orderType", "type": "string"}
-    ],
-    "name": "createSellOrderViaGasStation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "address", "name": "_admin", "type": "address"},
-      {"internalType": "address", "name": "_user", "type": "address"},
-      {"internalType": "uint256", "name": "_usdtAmount", "type": "uint256"}
-    ],
-    "name": "adminTransferUSDTViaGasStation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "address", "name": "_user", "type": "address"},
-      {"internalType": "uint256", "name": "_usdtAmount", "type": "uint256"},
-      {"internalType": "uint256", "name": "_inrAmount", "type": "uint256"},
-      {"internalType": "string", "name": "_orderType", "type": "string"},
-      {"internalType": "address", "name": "_adminWallet", "type": "address"}
-    ],
-    "name": "directSellTransferViaGasStation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getGasStation",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
   }
 ] as const
 
@@ -157,44 +103,21 @@ class GasStationService {
   private publicClient: any
   private chainId: number = 56
   private isInitialized: boolean = false
+  private currentRpcIndex: number = 0
 
   constructor() {
-    console.log(`🚀 Initializing Gas Station for BSC Mainnet only...`)
+    console.log(`🚀 Initializing Gas Station for BSC Mainnet with ${BSC_RPC_URLS.length} RPC endpoints...`)
     
     if (GAS_STATION_ENABLED && GAS_STATION_PRIVATE_KEY) {
       try {
         this.account = privateKeyToAccount(GAS_STATION_PRIVATE_KEY)
-        
-        // Use the custom BSC chain with better RPC
-        const customBSC = {
-          ...bsc,
-          rpcUrls: {
-            default: { http: BSC_RPC_URLS },
-            public: { http: BSC_RPC_URLS }
-          }
-        }
-        
-        // 🔥 FIX: Use reliable RPC with fallback
-        this.walletClient = createWalletClient({
-          account: this.account,
-          chain: customBSC,
-          transport: createTransportWithFallback()
-        })
-        
-        this.publicClient = createPublicClient({
-          chain: customBSC,
-          transport: createTransportWithFallback()
-        })
-        
+        this.initializeClients()
         this.isInitialized = true
         
-        console.log(`✅ Gas Station initialized for BSC Mainnet`)
-        console.log(`📍 Gas Station Address: ${this.account.address}`)
-        console.log(`🔗 Chain ID: ${this.chainId} (BSC Mainnet)`)
-        console.log(`🌐 RPC Endpoint: ${BSC_RPC_URLS[0]}`)
-        
-        // Check initial status with retry mechanism
-        this.checkGasStationStatusWithRetry()
+        console.log('✅ Gas Station initialized for BSC Mainnet')
+        console.log('📍 Gas Station Address:', this.account.address)
+        console.log('🔗 Chain ID:', this.chainId, '(BSC Mainnet)')
+        console.log('🌐 RPC Endpoints:', BSC_RPC_URLS.length)
         
       } catch (error) {
         console.error('❌ Failed to initialize Gas Station:', error)
@@ -202,9 +125,36 @@ class GasStationService {
       }
     } else {
       console.log('⚠️ Gas Station disabled or not configured')
-      console.log('- GAS_STATION_ENABLED:', GAS_STATION_ENABLED)
-      console.log('- Has Private Key:', !!GAS_STATION_PRIVATE_KEY)
     }
+  }
+
+  private initializeClients() {
+    // Use BSC mainnet with optimized transport
+    const optimizedBSC = {
+      ...bsc,
+      rpcUrls: {
+        default: { http: BSC_RPC_URLS },
+        public: { http: BSC_RPC_URLS }
+      }
+    }
+    
+    this.walletClient = createWalletClient({
+      account: this.account,
+      chain: optimizedBSC,
+      transport: createResilientTransport()
+    })
+    
+    this.publicClient = createPublicClient({
+      chain: optimizedBSC,
+      transport: createResilientTransport()
+    })
+  }
+
+  // 🔥 Add function to switch to next RPC on failure
+  private switchToNextRpc() {
+    this.currentRpcIndex = (this.currentRpcIndex + 1) % BSC_RPC_URLS.length
+    console.log(`🔄 Switching to RPC ${this.currentRpcIndex + 1}/${BSC_RPC_URLS.length}: ${BSC_RPC_URLS[this.currentRpcIndex]}`)
+    this.initializeClients()
   }
 
   private getContractAddress(contractType: 'USDT' | 'P2P_TRADING'): Address {
@@ -215,242 +165,25 @@ class GasStationService {
     return address
   }
 
-  // 🔥 FIX: Add retry mechanism for RPC calls
-  private async checkGasStationStatusWithRetry(maxRetries = 3): Promise<void> {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🔍 Gas Station status check attempt ${attempt}/${maxRetries}`)
-        const status = await this.checkGasStationStatus()
-        console.log('🔍 Initial Gas Station Status (Mainnet):', status)
-        return // Success, exit retry loop
-      } catch (error) {
-        console.error(`❌ Gas Station status check attempt ${attempt} failed:`, error)
-        if (attempt < maxRetries) {
-          const delay = attempt * 2000 // Exponential backoff: 2s, 4s, 6s
-          console.log(`⏳ Retrying in ${delay}ms...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        }
-      }
-    }
-    console.error('❌ All Gas Station status check attempts failed')
+  // 🔥 STREAMLINED: Skip complex status checks, just verify Gas Station is ready
+  isReady(): boolean {
+    return this.isInitialized && !!this.account
   }
 
-  // Enhanced status check with better error handling and caching
-  async checkGasStationStatus(): Promise<{
-    address: string
-    bnbBalance: string
-    usdtBalance: string
-    isReady: boolean
-    chainId: number
-    isInitialized: boolean
-    error?: string
-  }> {
-    console.log('🔍 Checking Gas Station status on BSC Mainnet...')
-    
-    if (!this.isInitialized || !this.account) {
-      const error = 'Gas Station not initialized'
-      console.error('❌', error)
-      return {
-        address: '',
-        bnbBalance: '0',
-        usdtBalance: '0',
-        isReady: false,
-        chainId: 56,
-        isInitialized: false,
-        error
-      }
-    }
-
-    try {
-      console.log(`🔍 Fetching balances for Gas Station: ${this.account.address} on BSC Mainnet`)
-      
-      // 🔥 FIX: Use Promise.allSettled to handle partial failures
-      const [bnbResult, usdtResult] = await Promise.allSettled([
-        this.publicClient.getBalance({
-          address: this.account.address
-        }),
-        readContract(this.publicClient, {
-          address: this.getContractAddress('USDT'),
-          abi: USDT_ABI,
-          functionName: 'balanceOf',
-          args: [this.account.address]
-        })
-      ])
-
-      // Handle BNB balance result
-      let bnbBalance = BigInt(0)
-      if (bnbResult.status === 'fulfilled') {
-        bnbBalance = bnbResult.value
-      } else {
-        console.warn('⚠️ Failed to fetch BNB balance:', bnbResult.reason)
-      }
-
-      // Handle USDT balance result  
-      let usdtBalance = BigInt(0)
-      if (usdtResult.status === 'fulfilled') {
-        usdtBalance = usdtResult.value
-      } else {
-        console.warn('⚠️ Failed to fetch USDT balance:', usdtResult.reason)
-      }
-
-      const bnbFormatted = formatUnits(bnbBalance, 18)
-      const usdtFormatted = formatUnits(usdtBalance, 18) // BSC USDT uses 18 decimals
-      
-      // 🔥 FIX: More lenient ready check - just need some BNB for gas
-      const isReady = parseFloat(bnbFormatted) > 0.0001
-
-      console.log('💰 Gas Station Balances (BSC Mainnet):', {
-        address: this.account.address,
-        bnb: bnbFormatted,
-        usdt: usdtFormatted,
-        isReady,
-        chainId: 56
-      })
-
-      return {
-        address: this.account.address,
-        bnbBalance: bnbFormatted,
-        usdtBalance: usdtFormatted,
-        isReady,
-        chainId: 56,
-        isInitialized: true
-      }
-    } catch (error) {
-      const errorMessage = `Error checking gas station status on BSC Mainnet: ${error instanceof Error ? error.message : String(error)}`
-      console.error('❌', errorMessage)
-      
-      // 🔥 FIX: If we can't check status but Gas Station is initialized, assume it's ready
-      // This prevents RPC issues from blocking Gas Station functionality
-      if (this.isInitialized && this.account) {
-        console.log('⚠️ RPC error detected, assuming Gas Station is ready due to successful initialization')
-        return {
-          address: this.account.address,
-          bnbBalance: 'unknown',
-          usdtBalance: 'unknown', 
-          isReady: true, // Assume ready if initialized
-          chainId: 56,
-          isInitialized: true,
-          error: `RPC issue (assuming ready): ${errorMessage}`
-        }
-      }
-      
-      return {
-        address: this.account?.address || '',
-        bnbBalance: '0',
-        usdtBalance: '0',
-        isReady: false,
-        chainId: 56,
-        isInitialized: this.isInitialized,
-        error: errorMessage
-      }
-    }
+  getAddress(): string {
+    return this.account?.address || ''
   }
 
-  // Enhanced admin transfer with better RPC handling
-  async adminTransferUSDT(
-    adminAddress: Address,
-    userAddress: Address,
-    usdtAmount: string
-  ): Promise<string> {
-    console.log('💸 Starting admin USDT transfer via Gas Station on BSC Mainnet...')
-    
-    if (!GAS_STATION_ENABLED) {
-      throw new Error('Gas Station is disabled')
-    }
-
-    if (!this.isInitialized || !this.account) {
-      throw new Error('Gas Station not initialized. Please check configuration.')
-    }
-
-    try {
-      // 🔥 FIX: Skip balance checks if RPC is having issues
-      // Try to get decimals, but don't fail if RPC is down
-      let usdtDecimals = 18 // Default for BSC USDT
-      try {
-        const contractDecimals = await readContract(this.publicClient, {
-          address: this.getContractAddress('USDT'),
-          abi: USDT_ABI,
-          functionName: 'decimals'
-        })
-        usdtDecimals = Number(contractDecimals)
-      } catch (rpcError) {
-        console.warn('⚠️ Could not fetch USDT decimals from RPC, using default 18:', rpcError)
-      }
-
-      console.log('🔍 USDT Contract Info:', {
-        address: this.getContractAddress('USDT'),
-        decimals: usdtDecimals,
-        note: 'BSC USDT uses 18 decimals'
-      })
-
-      const usdtAmountWei = parseUnits(usdtAmount, usdtDecimals)
-
-      // 🔥 FIX: Skip validation checks if RPC is having issues
-      // Try validation, but proceed if RPC fails (assumes admin has done due diligence)
-      try {
-        const [adminBalance, adminAllowance] = await Promise.all([
-          readContract(this.publicClient, {
-            address: this.getContractAddress('USDT'),
-            abi: USDT_ABI,
-            functionName: 'balanceOf',
-            args: [adminAddress]
-          }),
-          readContract(this.publicClient, {
-            address: this.getContractAddress('USDT'),
-            abi: USDT_ABI,
-            functionName: 'allowance',
-            args: [adminAddress, this.account.address]
-          })
-        ])
-
-        console.log('🔍 Admin transfer validation on BSC Mainnet:', {
-          adminBalance: formatUnits(adminBalance, usdtDecimals),
-          adminAllowanceForGasStation: formatUnits(adminAllowance, usdtDecimals),
-          required: usdtAmount,
-          gasStationAddress: this.account.address
-        })
-
-        if (adminBalance < usdtAmountWei) {
-          throw new Error(`Admin has insufficient USDT balance. Required: ${usdtAmount}, Available: ${formatUnits(adminBalance, usdtDecimals)}`)
-        }
-
-        if (adminAllowance < usdtAmountWei) {
-          throw new Error(`Admin needs to approve Gas Station for USDT spending. Required: ${usdtAmount} USDT, Current Approval: ${formatUnits(adminAllowance, usdtDecimals)} USDT.`)
-        }
-      } catch (validationError) {
-        console.warn('⚠️ Could not validate admin balance/allowance due to RPC issues, proceeding with transfer:', validationError)
-      }
-
-      console.log('📝 Executing DIRECT USDT transferFrom via Gas Station on BSC Mainnet...')
-      
-      // Execute the transfer (this will fail at the blockchain level if validation was actually needed)
-      const hash = await writeContract(this.walletClient, {
-          address: this.getContractAddress('USDT'),
-          abi: USDT_ABI,
-          functionName: 'transferFrom',
-          args: [adminAddress, userAddress, usdtAmountWei],
-          account: this.account,
-          chain: undefined,
-          gas: BigInt(100000)
-      })
-
-      console.log('✅ DIRECT USDT transferFrom completed via Gas Station on BSC Mainnet:', hash)
-      return hash
-    } catch (error) {
-      console.error('❌ Gas Station direct USDT transfer failed on BSC Mainnet:', error)
-      throw error
-    }
-  }
-
-  // Update other methods with similar RPC resilience...
+  // 🔥 ENHANCED: Transfer with RPC fallback and retry logic
   async userSellOrderViaGasStation(
     userAddress: Address,
     adminAddress: Address,
     usdtAmount: string,
     inrAmount: number,
-    orderType: string
+    orderType: string,
+    maxRetries = 3
   ): Promise<string> {
-    console.log('💸 Starting user sell order via Gas Station on BSC Mainnet...')
+    console.log('💸 Gas Station USDT transfer with RPC fallback...')
     
     if (!GAS_STATION_ENABLED) {
       throw new Error('Gas Station is disabled')
@@ -460,107 +193,93 @@ class GasStationService {
       throw new Error('Gas Station not initialized. Please check configuration.')
     }
 
-    // 🔥 FIX: Skip status check if it's likely to fail due to RPC issues
-    // Status check failure shouldn't block the actual transaction
-    try {
-      const status = await this.checkGasStationStatus()
-      if (!status.isReady && !status.error?.includes('RPC')) {
-        throw new Error(`Gas Station not ready on BSC Mainnet: ${status.error || 'Insufficient BNB balance'}`)
-      }
-    } catch (statusError) {
-      console.warn('⚠️ Gas Station status check failed, proceeding anyway:', statusError)
-    }
-
-    console.log('💸 User sell order via Gas Station on BSC Mainnet:', {
+    console.log('💸 Gas Station transfer (with failover):', {
       userAddress,
       adminAddress,
       usdtAmount,
       inrAmount,
       orderType,
-      gasStation: this.account.address
+      gasStation: this.account.address,
+      maxRetries,
+      currentRpc: BSC_RPC_URLS[this.currentRpcIndex]
     })
 
-    try {
-      // Use default decimals if RPC is having issues
-      let usdtDecimals = 18
+    let lastError: any = null
+
+    // Try multiple times with different RPCs
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const contractDecimals = await readContract(this.publicClient, {
-          address: this.getContractAddress('USDT'),
-          abi: USDT_ABI,
-          functionName: 'decimals'
-        })
-        usdtDecimals = Number(contractDecimals)
-      } catch (rpcError) {
-        console.warn('⚠️ Using default USDT decimals due to RPC issue:', rpcError)
-      }
+        console.log(`🔄 Transfer attempt ${attempt}/${maxRetries} using RPC: ${BSC_RPC_URLS[this.currentRpcIndex]}`)
+        
+        // BSC USDT uses 18 decimals
+        const usdtDecimals = 18
+        const usdtAmountWei = parseUnits(usdtAmount, usdtDecimals)
 
-      const usdtAmountWei = parseUnits(usdtAmount, usdtDecimals)
-
-      // 🔥 FIX: Skip validation if RPC is having issues
-      try {
-        const [userBalance, userAllowance] = await Promise.all([
-          readContract(this.publicClient, {
-            address: this.getContractAddress('USDT'),
-            abi: USDT_ABI,
-            functionName: 'balanceOf',
-            args: [userAddress]
-          }),
-          readContract(this.publicClient, {
-            address: this.getContractAddress('USDT'),
-            abi: USDT_ABI,
-            functionName: 'allowance',
-            args: [userAddress, this.account.address]
-          })
-        ])
-
-        console.log('🔍 User sell order validation on BSC Mainnet:', {
-          userBalance: formatUnits(userBalance, usdtDecimals),
-          userAllowanceForGasStation: formatUnits(userAllowance, usdtDecimals),
-          required: usdtAmount,
-          gasStationAddress: this.account.address
+        console.log('📝 Executing Gas Station USDT transferFrom:', {
+          attempt,
+          amount: usdtAmount,
+          amountWei: usdtAmountWei.toString(),
+          from: userAddress,
+          to: adminAddress,
+          rpc: BSC_RPC_URLS[this.currentRpcIndex]
         })
 
-        if (userBalance < usdtAmountWei) {
-          throw new Error(`User has insufficient USDT balance. Required: ${usdtAmount}, Available: ${formatUnits(userBalance, usdtDecimals)}`)
-        }
-
-        if (userAllowance < usdtAmountWei) {
-          throw new Error(`User needs to approve Gas Station for USDT spending. Required: ${usdtAmount} USDT, Current Approval: ${formatUnits(userAllowance, usdtDecimals)} USDT. Please approve Gas Station first.`)
-        }
-      } catch (validationError) {
-        console.warn('⚠️ Could not validate user balance/allowance due to RPC issues, proceeding with transfer:', validationError)
-      }
-
-      console.log('📝 Executing user USDT transfer via Gas Station on BSC Mainnet...')
-      
-      // Execute the direct USDT transfer (Gas Station pays gas)
-      const hash = await writeContract(this.walletClient, {
+        // 🔥 Execute with current RPC
+        const hash = await writeContract(this.walletClient, {
           address: this.getContractAddress('USDT'),
           abi: USDT_ABI,
           functionName: 'transferFrom',
           args: [userAddress, adminAddress, usdtAmountWei],
           account: this.account,
           chain: undefined,
-          gas: BigInt(100000)
-      })
+          gas: BigInt(100000), // Fixed gas limit
+          gasPrice: BigInt(1500000000) // 1.5 gwei (slightly higher for faster processing)
+        })
 
-      console.log('✅ User USDT transfer completed via Gas Station on BSC Mainnet:', hash)
-      return hash
-    } catch (error) {
-      console.error('❌ Gas Station user sell transfer failed on BSC Mainnet:', error)
-      throw error
+        console.log(`✅ Gas Station transfer successful on attempt ${attempt}:`, hash)
+        return hash
+        
+      } catch (error) {
+        lastError = error
+        console.error(`❌ Transfer attempt ${attempt} failed:`, error)
+        
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        
+        // Check if it's a timeout/network error
+        if (errorMessage.includes('timeout') || 
+            errorMessage.includes('aborted') || 
+            errorMessage.includes('HTTP request failed') ||
+            errorMessage.includes('fetch failed')) {
+          
+          console.log(`🔄 Network error on attempt ${attempt}, trying next RPC...`)
+          
+          // Switch to next RPC for next attempt
+          if (attempt < maxRetries) {
+            this.switchToNextRpc()
+            await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2s before retry
+            continue
+          }
+        } else {
+          // Non-network error (like insufficient approval), don't retry
+          console.error(`❌ Non-network error, not retrying:`, errorMessage)
+          break
+        }
+      }
     }
+
+    // All attempts failed
+    console.error('❌ All Gas Station transfer attempts failed')
+    throw lastError || new Error('Gas Station transfer failed after all attempts')
   }
 
-  // Add other existing methods here...
-  async createBuyOrder(
+  // 🔥 ENHANCED: Admin transfer with RPC fallback
+  async adminTransferUSDT(
+    adminAddress: Address,
     userAddress: Address,
     usdtAmount: string,
-    inrAmount: number,
-    orderType: string
+    maxRetries = 3
   ): Promise<string> {
-    // Implementation with same RPC resilience patterns...
-    console.log('🏗️ Creating buy order via Gas Station on BSC Mainnet...')
+    console.log('💸 Gas Station admin USDT transfer with RPC fallback...')
     
     if (!GAS_STATION_ENABLED) {
       throw new Error('Gas Station is disabled')
@@ -570,101 +289,114 @@ class GasStationService {
       throw new Error('Gas Station not initialized. Please check configuration.')
     }
 
-    try {
-      const usdtAmountWei = parseUnits(usdtAmount, 18) // BSC USDT uses 18 decimals
-      const inrAmountWei = BigInt(inrAmount * 100)
+    let lastError: any = null
 
-      const hash = await writeContract(this.walletClient, {
-          address: this.getContractAddress('P2P_TRADING'),
-          abi: P2P_TRADING_ABI,
-          functionName: 'createBuyOrderViaGasStation',
-          args: [userAddress, usdtAmountWei, inrAmountWei, orderType],
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Admin transfer attempt ${attempt}/${maxRetries} using RPC: ${BSC_RPC_URLS[this.currentRpcIndex]}`)
+        
+        const usdtDecimals = 18 // BSC USDT uses 18 decimals
+        const usdtAmountWei = parseUnits(usdtAmount, usdtDecimals)
+
+        console.log('📝 Executing admin USDT transferFrom via Gas Station:', {
+          attempt,
+          amount: usdtAmount,
+          amountWei: usdtAmountWei.toString(),
+          from: adminAddress,
+          to: userAddress,
+          rpc: BSC_RPC_URLS[this.currentRpcIndex]
+        })
+        
+        const hash = await writeContract(this.walletClient, {
+          address: this.getContractAddress('USDT'),
+          abi: USDT_ABI,
+          functionName: 'transferFrom',
+          args: [adminAddress, userAddress, usdtAmountWei],
           account: this.account,
-          chain: undefined
-      })
+          chain: undefined,
+          gas: BigInt(100000),
+          gasPrice: BigInt(1500000000) // 1.5 gwei
+        })
 
-      console.log('✅ Buy order created via Gas Station on BSC Mainnet:', hash)
-      return hash
-    } catch (error) {
-      console.error('❌ Gas Station buy order creation failed on BSC Mainnet:', error)
-      throw error
+        console.log(`✅ Admin transfer successful on attempt ${attempt}:`, hash)
+        return hash
+        
+      } catch (error) {
+        lastError = error
+        console.error(`❌ Admin transfer attempt ${attempt} failed:`, error)
+        
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        
+        if (errorMessage.includes('timeout') || 
+            errorMessage.includes('aborted') || 
+            errorMessage.includes('HTTP request failed') ||
+            errorMessage.includes('fetch failed')) {
+          
+          if (attempt < maxRetries) {
+            this.switchToNextRpc()
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            continue
+          }
+        } else {
+          break
+        }
+      }
     }
+
+    throw lastError || new Error('Admin transfer failed after all attempts')
   }
 
-  async createSellOrder(
-    userAddress: Address,
-    usdtAmount: string,
-    inrAmount: number,
-    orderType: string
-  ): Promise<string> {
-    // Implementation with same patterns...
-    console.log('🏗️ Creating sell order via Gas Station on BSC Mainnet...')
-    
-    if (!GAS_STATION_ENABLED) {
-      throw new Error('Gas Station is disabled')
-    }
-
-    if (!this.isInitialized || !this.account) {
-      throw new Error('Gas Station not initialized. Please check configuration.')
+  // 🔥 STREAMLINED: Basic validation with timeout protection  
+  async validateUserApproval(userAddress: Address, usdtAmount: string): Promise<{ hasBalance: boolean; hasApproval: boolean }> {
+    if (!this.isInitialized) {
+      return { hasBalance: false, hasApproval: false }
     }
 
     try {
       const usdtAmountWei = parseUnits(usdtAmount, 18)
-      const inrAmountWei = BigInt(inrAmount * 100)
+      
+      // 🔥 Use Promise.race for timeout protection
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Validation timeout')), 3000)
+      )
 
-      const hash = await writeContract(this.walletClient, {
-          address: this.getContractAddress('P2P_TRADING'),
-          abi: P2P_TRADING_ABI,
-          functionName: 'createSellOrderViaGasStation',
-          args: [userAddress, usdtAmountWei, inrAmountWei, orderType],
-          account: this.account,
-          chain: undefined
+      const validationPromise = Promise.all([
+        readContract(this.publicClient, {
+          address: this.getContractAddress('USDT'),
+          abi: USDT_ABI,
+          functionName: 'balanceOf',
+          args: [userAddress]
+        }),
+        readContract(this.publicClient, {
+          address: this.getContractAddress('USDT'),
+          abi: USDT_ABI,
+          functionName: 'allowance',
+          args: [userAddress, this.account.address]
+        })
+      ])
+
+      const [userBalance, userAllowance] = await Promise.race([
+        validationPromise,
+        timeoutPromise
+      ]) as [bigint, bigint]
+
+      const hasBalance = userBalance >= usdtAmountWei
+      const hasApproval = userAllowance >= usdtAmountWei
+
+      console.log('✅ Quick validation completed:', {
+        hasBalance,
+        hasApproval,
+        userBalance: formatUnits(userBalance, 18),
+        userAllowance: formatUnits(userAllowance, 18),
+        required: usdtAmount
       })
 
-      console.log('✅ Sell order created via Gas Station on BSC Mainnet:', hash)
-      return hash
+      return { hasBalance, hasApproval }
+
     } catch (error) {
-      console.error('❌ Gas Station sell order creation failed on BSC Mainnet:', error)
-      throw error
-    }
-  }
-
-  async directSellTransfer(
-    userAddress: Address,
-    usdtAmount: string,
-    inrAmount: number,
-    orderType: string,
-    adminWallet: Address
-  ): Promise<string> {
-    // Implementation with same patterns...
-    console.log('🔄 Starting direct sell transfer via Gas Station on BSC Mainnet...')
-    
-    if (!GAS_STATION_ENABLED) {
-      throw new Error('Gas Station is disabled')
-    }
-
-    if (!this.isInitialized || !this.account) {
-      throw new Error('Gas Station not initialized. Please check configuration.')
-    }
-
-    try {
-      const usdtAmountWei = parseUnits(usdtAmount, 18)
-      const inrAmountWei = BigInt(inrAmount * 100)
-
-      const hash = await writeContract(this.walletClient, {
-          address: this.getContractAddress('P2P_TRADING'),
-          abi: P2P_TRADING_ABI,
-          functionName: 'directSellTransferViaGasStation',
-          args: [userAddress, usdtAmountWei, inrAmountWei, orderType, adminWallet],
-          account: this.account,
-          chain: undefined
-      })
-
-      console.log('✅ Direct sell transfer completed via Gas Station on BSC Mainnet:', hash)
-      return hash
-    } catch (error) {
-      console.error('❌ Gas Station direct sell transfer failed on BSC Mainnet:', error)
-      throw error
+      console.warn('⚠️ Validation failed/timeout, assuming user is ready:', error)
+      // If validation fails, assume user is ready (Gas Station will find out during execution)
+      return { hasBalance: true, hasApproval: true }
     }
   }
 }

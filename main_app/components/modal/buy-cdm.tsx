@@ -21,6 +21,8 @@ import { useModalState } from "@/hooks/useModalState";
 import { useOrderPaymentDetails } from "@/hooks/useOrderPaymentDetails";
 import { useBankDetails } from '@/hooks/useBankDetails'
 import { useWalletManager } from '@/hooks/useWalletManager'
+import { useUSDTCalculation } from '@/lib/utils/calculateUSDT'
+import {useRates} from '@/hooks/useRates'
 
 interface BuyCDMModalProps {
   isOpen: boolean;
@@ -58,6 +60,9 @@ export default function BuyCDMModal({
     orderData?.fullId || orderData?.id, 
     isOpen && !!orderData
   );
+
+  const { calculateUSDTFromINR } = useUSDTCalculation();
+  const { getBuyRate } = useRates();
 
   // Check if admin has provided bank details
   const hasReceivedAdminDetails = !!(paymentDetails?.adminBankDetails);
@@ -288,7 +293,7 @@ export default function BuyCDMModal({
   };
 
   const { bankDetails } = useBankDetails()
-
+  
   return (
     <AnimatePresence>
       {isOpen && (
@@ -434,13 +439,21 @@ export default function BuyCDMModal({
                 <div className="mb-6">
                   {/* Primary Amount */}
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
-                    {!isUpiPaid ? '₹500' : `₹${displayAmount}`}
+                    {!isUpiPaid 
+                      ? '₹500' 
+                      : hasReceivedAdminDetails && paymentDetails?.customAmount
+                        ? `₹${paymentDetails.customAmount}`
+                        : `₹${displayAmount}`
+                    }
                   </div>
                   
-                  {/* Secondary Amount - Show USDT equivalent */}
+                  {/* Secondary Amount - Show USDT equivalent when admin provides main transfer amount */}
                   {hasReceivedAdminDetails && isUpiPaid && (
                     <div className="text-2xl md:text-2xl font-medium text-gray-300 mb-2">
-                      ≈ {usdtAmount} USDT
+                      ≈ {paymentDetails?.customAmount 
+                          ? calculateUSDTFromINR(paymentDetails.customAmount, 'CDM')
+                          : usdtAmount
+                        } USDT
                     </div>
                   )}
                   
@@ -450,16 +463,21 @@ export default function BuyCDMModal({
                       CDM Order Verification Fee
                     </div>
                   )}
-                  {isUpiPaid && hasReceivedAdminDetails && paymentDetails?.customAmount && displayAmount !== amount && (
+                  {isUpiPaid && hasReceivedAdminDetails && paymentDetails?.customAmount && 
+                   paymentDetails.originalAmount && 
+                   Math.abs(paymentDetails.customAmount - paymentDetails.originalAmount) > 0.01 && (
                     <div className="text-sm text-green-400 font-normal mb-2">
-                      (Custom amount set by admin)
+                      ✨ Custom amount set by admin (Original: ₹{paymentDetails.originalAmount})
                     </div>
                   )}
                   
-                  {/* Conversion Rate Display */}
+                  {/* Conversion Rate Display - Only show for main transfer */}
                   {hasReceivedAdminDetails && isUpiPaid && (
                     <div className="text-xs text-gray-400 mb-2">
-                      You will receive {usdtAmount} USDT for ₹{displayAmount}
+                      You will receive {paymentDetails?.customAmount 
+                        ? calculateUSDTFromINR(paymentDetails.customAmount, 'CDM')
+                        : usdtAmount
+                      } USDT for ₹{paymentDetails?.customAmount || displayAmount}
                     </div>
                   )}
                   
@@ -537,12 +555,18 @@ export default function BuyCDMModal({
                 {hasReceivedAdminDetails && isUpiPaid && !isWaitingConfirmation && !isPaid && (
                   <div className="mb-8">
                     <div className="text-white mb-1">
-                      Please transfer ₹{displayAmount} to admin's bank account
+                      Please transfer ₹{paymentDetails?.customAmount || displayAmount} to admin's bank account
                     </div>
                     <div className="text-[#26AF6C] text-xs flex items-center justify-center mb-4">
                       <TriangleAlert className="w-3 h-3 mr-1" />
                       Transfer only to the admin's bank account provided below
                     </div>
+                    {/* Show rate information for main transfer */}
+                    {paymentDetails?.customAmount && (
+                      <div className="text-xs text-gray-400 text-center">
+                        At current rate: 1 USDT = ₹{getBuyRate('CDM')} • You get {calculateUSDTFromINR(paymentDetails.customAmount, 'CDM')} USDT
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -852,7 +876,7 @@ export default function BuyCDMModal({
                       ) : isUpiPaid && hasReceivedAdminDetails ? (
                         <>
                           <CreditCard className="w-5 h-5" />
-                          <span>I Paid ₹{displayAmount} To Admin Bank</span>
+                          <span>I Paid ₹{paymentDetails?.customAmount || displayAmount} To Admin Bank</span>
                         </>
                       ) : isUpiPaid && !hasReceivedAdminDetails ? (
                         // New condition for waiting state after UPI payment

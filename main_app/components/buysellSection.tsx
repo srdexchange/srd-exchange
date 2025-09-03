@@ -16,7 +16,7 @@ import BankDetailsModal, { BankDetailsData } from './modal/bank-details-modal'
 import { useBankDetails } from '@/hooks/useBankDetails'
 import { readContract } from '@wagmi/core'
 import { config } from '@/lib/wagmi'
-import { parseUnits } from 'viem'
+import { parseUnits, formatUnits } from 'viem'
 
 
 const CONTRACTS = {
@@ -197,26 +197,38 @@ export default function BuySellSection() {
           
           // Step 1: Check if user has approved Gas Station
           const gasStationAddress = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
-          
-          const currentAllowance = await readContract(config as any, {
-            address: CONTRACTS.USDT[56],
-            abi: USDT_ABI,
-            functionName: 'allowance',
-            args: [address, gasStationAddress],
+
+          let currentAllowance: bigint;
+          try {
+            currentAllowance = await readContract(config as any, {
+              address: CONTRACTS.USDT[56],
+              abi: USDT_ABI,
+              functionName: 'allowance',
+              args: [address, gasStationAddress],
+            });
+          } catch (allowanceError) {
+            console.error('❌ Failed to check allowance:', allowanceError);
+            throw new Error('Unable to check Gas Station approval status. Please try again.');
+          }
+
+          const requiredAmount = parseUnits(finalUsdtAmount, 18); // BSC USDT uses 18 decimals
+
+          console.log('🔍 Gas Station approval check:', {
+            currentAllowance: currentAllowance.toString(),
+            requiredAmount: requiredAmount.toString(),
+            sufficient: currentAllowance >= requiredAmount
           });
 
-          const requiredAmount = parseUnits(finalUsdtAmount, 18); // Assuming 18 decimals
-          
           if (currentAllowance < requiredAmount) {
             console.log('🔓 User needs to approve Gas Station for USDT...');
             
             const shouldApprove = confirm(
               `🔐 GAS STATION APPROVAL REQUIRED\n\n` +
-              `To enable gas-free transactions, approve Gas Station for USDT spending.\n\n` +
-              `✅ You pay gas for this approval only (~$0.20)\n` +
-              `✅ Gas Station pays gas for the actual transfer\n` +
-              `✅ Approving ${(parseFloat(finalUsdtAmount) * 10).toFixed(2)} USDT for future orders\n\n` +
-              `Current order: ${finalUsdtAmount} USDT\n\n` +
+              `To enable gas-free transactions, you need to approve Gas Station for USDT spending.\n\n` +
+              `✅ You pay gas ONLY for this approval (~$0.20)\n` +
+              `✅ Gas Station pays gas for the actual USDT transfer\n` +
+              `✅ Future orders will be completely gas-free\n\n` +
+              `Approving ${(parseFloat(finalUsdtAmount) * 10).toFixed(2)} USDT for future orders\n\n` +
               `Click OK to approve Gas Station`
             );
 
@@ -224,38 +236,124 @@ export default function BuySellSection() {
               throw new Error('Gas Station approval cancelled by user');
             }
 
-            // 🔥 FIX: Use the approveUSDT function from the hook (already imported at top level)
-            const approveAmount = (parseFloat(finalUsdtAmount) * 10).toFixed(6); // 10x for future transactions
-            
-            await approveUSDT(gasStationAddress as `0x${string}`, approveAmount);
-            
-            console.log('⏳ Waiting for Gas Station approval...');
-            await new Promise(resolve => setTimeout(resolve, 8000));
+            try {
+              // User approves Gas Station (user pays gas ONLY for this approval)
+              const approveAmount = (parseFloat(finalUsdtAmount) * 10).toFixed(6); // 10x for future transactions
+              
+              console.log('🔓 Submitting Gas Station approval transaction...');
+              await approveUSDT(gasStationAddress as `0x${string}`, approveAmount);
+              
+              console.log('⏳ Waiting for Gas Station approval confirmation...');
+              
+
+              const isApprovalVerified = await verifyGasStationApproval(address, gasStationAddress, finalUsdtAmount);
+              
+              if (!isApprovalVerified) {
+                throw new Error('Gas Station approval verification failed. Please wait for your approval transaction to confirm and try again.');
+              }
+              
+              console.log('✅ Gas Station approval verified successfully');
+              
+            } catch (approvalError) {
+              console.error('❌ Gas Station approval failed:', approvalError);
+              const errorMessage = approvalError instanceof Error ? approvalError.message : String(approvalError);
+              
+              if (errorMessage.includes('User rejected') || errorMessage.includes('rejected')) {
+                throw new Error('Gas Station approval was rejected in wallet. Please approve to continue.');
+              } else if (errorMessage.includes('insufficient funds')) {
+                throw new Error('Insufficient BNB for gas fees. Please add BNB to your wallet and try again.');
+              } else {
+                throw new Error(`Gas Station approval failed: ${errorMessage}`);
+              }
+            }
           }
-          
+
           // Step 2: Gas Station executes the transfer (Gas Station pays gas)
-          console.log('🚀 Gas Station executing USDT transfer (Gas Station pays gas)...');
-          
-          const response = await fetch('/api/gas-station/user-sell-transfer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userAddress: address,
-              adminAddress: adminWallet,
-              usdtAmount: finalUsdtAmount,
-              inrAmount: parseFloat(finalOrderAmount),
-              orderType,
-              chainId: 56
-            })
+          console.log('🚀 Gas Station executing USDT transfer (Gas Station pays ALL gas fees)...');
+
+          // 🔥 FIX: Double-check approval status before calling API
+          console.log('🔍 Final approval verification before Gas Station transfer...');
+          const finalAllowanceCheck = await readContract(config as any, {
+            address: CONTRACTS.USDT[56],
+            abi: USDT_ABI,
+            functionName: 'allowance',
+            args: [address, gasStationAddress],
           });
 
-          const gasStationResult = await response.json();
-          
-          if (!response.ok) {
-            throw new Error(gasStationResult.error || 'Gas Station transfer failed');
+          const finalRequiredAmount = parseUnits(finalUsdtAmount, 18);
+          console.log('🔍 Final allowance verification:', {
+            finalAllowance: finalAllowanceCheck.toString(),
+            requiredAmount: finalRequiredAmount.toString(),
+            sufficient: finalAllowanceCheck >= finalRequiredAmount
+          });
+
+          if (finalAllowanceCheck < finalRequiredAmount) {
+            throw new Error(`Approval verification failed. Please wait for your approval transaction to confirm and try again. Current allowance: ${formatUnits(finalAllowanceCheck, 18)} USDT, Required: ${finalUsdtAmount} USDT`);
           }
 
-          console.log('✅ Gas Station transfer successful:', gasStationResult.txHash);
+          console.log('✅ Final approval verification passed - proceeding with Gas Station API call');
+
+          let gasStationResult: any;
+
+          try {
+            const response = await fetch('/api/gas-station/user-sell-transfer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userAddress: address,
+                adminAddress: adminWallet,
+                usdtAmount: finalUsdtAmount,
+                inrAmount: parseFloat(finalOrderAmount),
+                orderType,
+                chainId: 56
+              })
+            });
+
+            gasStationResult = await response.json();
+
+            if (!response.ok) {
+              // Handle specific error codes
+              if (gasStationResult.code === 'APPROVAL_REQUIRED' || gasStationResult.needsApproval) {
+                // This shouldn't happen after our verification, but handle gracefully
+                throw new Error('Gas Station still reports missing approval. Your approval transaction may still be pending. Please wait a moment and try again.');
+              } else if (gasStationResult.code === 'INSUFFICIENT_BALANCE') {
+                throw new Error('INSUFFICIENT_BALANCE: You do not have enough USDT for this transaction.');
+              } else if (gasStationResult.retryable) {
+                // For network issues, offer retry option
+                const shouldRetry = confirm(
+                  `⚠️ NETWORK TEMPORARILY BUSY\n\n` +
+                  `${gasStationResult.error}\n\n` +
+                  `This is usually temporary. Would you like to try again?`
+                );
+                
+                if (shouldRetry) {
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  return createOrder(orderType, orderAmount, rate);
+                } else {
+                  throw new Error('Transaction cancelled by user.');
+                }
+              } else {
+                throw new Error(gasStationResult.error || 'Gas Station transfer failed');
+              }
+            }
+
+            console.log('✅ Gas Station transfer successful - Gas Station paid all gas fees:', gasStationResult.txHash);
+            
+          } catch (gasStationError) {
+            console.error('❌ Gas Station API call failed:', gasStationError);
+            
+            const errorMessage = gasStationError instanceof Error ? gasStationError.message : String(gasStationError);
+            
+            if (errorMessage.includes('approval')) {
+              throw new Error('Gas Station approval issue. Please ensure your approval transaction is confirmed and try again.');
+            } else if (errorMessage.includes('INSUFFICIENT_BALANCE')) {
+              throw new Error('Insufficient USDT balance for this order.');
+            } else {
+              throw new Error(`Gas Station error: ${errorMessage}`);
+            }
+          }
+
+          console.log('✅ Gas Station transfer successful - Gas Station paid all gas fees:', gasStationResult.txHash);
           
           // Wait for Gas Station transaction
           await new Promise(resolve => setTimeout(resolve, 5000));
@@ -1177,4 +1275,34 @@ export default function BuySellSection() {
       />
     </>
   )
+}
+async function verifyGasStationApproval(address: string, gasStationAddress: string, finalUsdtAmount: string): Promise<boolean> {
+  try {
+    console.log('🔍 Verifying Gas Station approval...', {
+      userAddress: address,
+      gasStationAddress,
+      requiredAmount: finalUsdtAmount
+    });
+
+    // Check current allowance
+    const currentAllowance = await readContract(config as any, {
+      address: CONTRACTS.USDT[56],
+      abi: USDT_ABI,
+      functionName: 'allowance',
+      args: [address as `0x${string}`, gasStationAddress as `0x${string}`],
+    });
+
+    const requiredAmount = parseUnits(finalUsdtAmount, 18); // BSC USDT uses 18 decimals
+
+    console.log('🔍 Approval verification:', {
+      currentAllowance: currentAllowance.toString(),
+      requiredAmount: requiredAmount.toString(),
+      sufficient: currentAllowance >= requiredAmount
+    });
+
+    return currentAllowance >= requiredAmount;
+  } catch (error) {
+    console.error('❌ Failed to verify Gas Station approval:', error);
+    return false;
+  }
 }
