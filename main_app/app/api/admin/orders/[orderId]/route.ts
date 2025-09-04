@@ -3,10 +3,10 @@ import { prisma } from '@/lib/prisma'
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params
+    const { orderId } = await params // 🔥 FIX: await the params
     const body = await request.json()
     
     console.log('📝 Admin order update request:', {
@@ -14,7 +14,6 @@ export async function PATCH(
       updateData: body
     })
 
-    // 🔥 FIX: Handle custom amount properly
     const updateData: any = {}
     
     if (body.status) updateData.status = body.status
@@ -22,7 +21,6 @@ export async function PATCH(
     if (body.adminBankDetails !== undefined) updateData.adminBankDetails = body.adminBankDetails
     if (body.adminNotes !== undefined) updateData.adminNotes = body.adminNotes
     
-    // 🔥 CRITICAL: Handle custom amount conversion
     if (body.customAmount !== undefined) {
       const customAmountValue = parseFloat(body.customAmount.toString())
       if (!isNaN(customAmountValue) && customAmountValue > 0) {
@@ -51,7 +49,7 @@ export async function PATCH(
       orderId: updatedOrder.id,
       status: updatedOrder.status,
       adminUpiId: updatedOrder.adminUpiId,
-      customAmount: updatedOrder.customAmount, // 🔥 LOG: Custom amount
+      customAmount: updatedOrder.customAmount,
       originalAmount: updatedOrder.amount
     })
 
@@ -74,10 +72,10 @@ export async function PATCH(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params
+    const { orderId } = await params // 🔥 FIX: await the params
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },

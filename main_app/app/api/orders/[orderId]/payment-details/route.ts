@@ -3,10 +3,10 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { orderId: string } }
+  { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = params;
+    const { orderId } = await params; 
 
     console.log('🔍 Fetching payment details for order:', orderId);
 
@@ -19,7 +19,7 @@ export async function GET(
         adminBankDetails: true,
         adminNotes: true,
         customAmount: true, 
-        amount: true, // Include original amount for comparison
+        amount: true, 
         updatedAt: true
       }
     });
@@ -32,7 +32,7 @@ export async function GET(
       );
     }
 
-    // Only return payment details if admin has provided them
+
     if (!order.adminUpiId && !order.adminBankDetails) {
       console.log('ℹ️ No payment details available yet for order:', orderId);
       return NextResponse.json({
@@ -59,7 +59,7 @@ export async function GET(
       orderId,
       hasUpiId: !!paymentDetails.adminUpiId,
       hasBankDetails: !!paymentDetails.adminBankDetails,
-      customAmount: paymentDetails.customAmount, // 🔥 LOG: Custom amount
+      customAmount: paymentDetails.customAmount,
       originalAmount: paymentDetails.originalAmount
     });
 

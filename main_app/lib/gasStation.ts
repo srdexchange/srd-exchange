@@ -3,35 +3,33 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { bsc } from 'viem/chains'
 import { writeContract, readContract, simulateContract } from 'viem/actions'
 
-// Gas Station configuration
+
 const GAS_STATION_PRIVATE_KEY = process.env.GAS_STATION_PRIVATE_KEY as `0x${string}`
 const GAS_STATION_ENABLED = process.env.NEXT_PUBLIC_GAS_STATION_ENABLED === 'true'
 
-// 🔥 FIX: Use multiple reliable RPC endpoints with fast fallback
+
 const BSC_RPC_URLS = [
-  'https://bsc.nodereal.io', // NodeReal (fastest)
-  'https://bsc-dataseed.bnbchain.org', // Official BSC
-  'https://rpc.ankr.com/bsc', // Ankr
-  'https://bsc-dataseed1.defibit.io', // Defi backup
-  'https://bsc-dataseed1.ninicoin.io', // Another backup
-  'https://bsc-dataseed2.defibit.io', // More backups
+  'https://bsc.nodereal.io',
+  'https://bsc-dataseed.bnbchain.org',
+  'https://rpc.ankr.com/bsc', 
+  'https://bsc-dataseed1.defibit.io',
+  'https://bsc-dataseed1.ninicoin.io',
+  'https://bsc-dataseed2.defibit.io', 
 ]
 
-// Function to create transport with aggressive timeouts and fallback
+
 const createTransportWithFallback = (rpcIndex = 0) => {
   const currentRpc = BSC_RPC_URLS[rpcIndex] || BSC_RPC_URLS[0]
   
   return http(currentRpc, {
-    batch: false, // 🔥 Disable batching for faster response
-    fetchOptions: {
-      timeout: 8000, // 8 second timeout
-    },
-    retryCount: 1, // Single retry per RPC
-    retryDelay: 1000 // 1 second between retries
+    batch: false, 
+    timeout: 8000, 
+    retryCount: 1, 
+    retryDelay: 1000 
   })
 }
 
-// Function to try multiple RPC endpoints
+
 const createResilientTransport = () => {
   let currentRpcIndex = 0
   
@@ -62,7 +60,7 @@ if (!GAS_STATION_PRIVATE_KEY && GAS_STATION_ENABLED) {
   throw new Error('GAS_STATION_PRIVATE_KEY is required when gas station is enabled')
 }
 
-// Contract addresses - MAINNET ONLY
+
 const CONTRACTS = {
   USDT: {
     [56]: '0x55d398326f99059fF775485246999027B3197955' as Address,
@@ -72,7 +70,7 @@ const CONTRACTS = {
   }
 }
 
-// ABIs (simplified for Gas Station use)
+
 const USDT_ABI = [
   {
     "inputs": [{"internalType": "address", "name": "from", "type": "address"}, {"internalType": "address", "name": "to", "type": "address"}, {"internalType": "uint256", "name": "amount", "type": "uint256"}],
@@ -129,7 +127,7 @@ class GasStationService {
   }
 
   private initializeClients() {
-    // Use BSC mainnet with optimized transport
+ 
     const optimizedBSC = {
       ...bsc,
       rpcUrls: {
@@ -150,7 +148,7 @@ class GasStationService {
     })
   }
 
-  // 🔥 Add function to switch to next RPC on failure
+
   private switchToNextRpc() {
     this.currentRpcIndex = (this.currentRpcIndex + 1) % BSC_RPC_URLS.length
     console.log(`🔄 Switching to RPC ${this.currentRpcIndex + 1}/${BSC_RPC_URLS.length}: ${BSC_RPC_URLS[this.currentRpcIndex]}`)
@@ -165,8 +163,7 @@ class GasStationService {
     return address
   }
 
-  // 🔥 STREAMLINED: Skip complex status checks, just verify Gas Station is ready
-  isReady(): boolean {
+ isReady(): boolean {
     return this.isInitialized && !!this.account
   }
 
@@ -174,7 +171,7 @@ class GasStationService {
     return this.account?.address || ''
   }
 
-  // 🔥 ENHANCED: Transfer with RPC fallback and retry logic
+
   async userSellOrderViaGasStation(
     userAddress: Address,
     adminAddress: Address,
@@ -206,12 +203,12 @@ class GasStationService {
 
     let lastError: any = null
 
-    // Try multiple times with different RPCs
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         console.log(`🔄 Transfer attempt ${attempt}/${maxRetries} using RPC: ${BSC_RPC_URLS[this.currentRpcIndex]}`)
         
-        // BSC USDT uses 18 decimals
+      
         const usdtDecimals = 18
         const usdtAmountWei = parseUnits(usdtAmount, usdtDecimals)
 
@@ -224,7 +221,7 @@ class GasStationService {
           rpc: BSC_RPC_URLS[this.currentRpcIndex]
         })
 
-        // 🔥 Execute with current RPC
+        
         const hash = await writeContract(this.walletClient, {
           address: this.getContractAddress('USDT'),
           abi: USDT_ABI,
@@ -232,8 +229,8 @@ class GasStationService {
           args: [userAddress, adminAddress, usdtAmountWei],
           account: this.account,
           chain: undefined,
-          gas: BigInt(100000), // Fixed gas limit
-          gasPrice: BigInt(1500000000) // 1.5 gwei (slightly higher for faster processing)
+          gas: BigInt(100000), 
+          gasPrice: BigInt(1000000000) 
         })
 
         console.log(`✅ Gas Station transfer successful on attempt ${attempt}:`, hash)
