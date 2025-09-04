@@ -66,21 +66,31 @@ export interface P2PTradingInterface extends Interface {
   getFunction(
     nameOrSignature:
       | "addAdmin"
+      | "addGasStation"
       | "admin"
       | "adminExecuteSellTransfer"
+      | "adminTransferUSDTViaGasStation"
       | "approveOrder"
       | "authorizedAdmins"
+      | "authorizedGasStations"
       | "completeBuyOrder"
       | "completeSellOrder"
       | "confirmOrderReceived"
       | "createBuyOrder"
+      | "createBuyOrderViaGasStation"
       | "createSellOrder"
+      | "createSellOrderViaGasStation"
       | "directSellTransfer"
+      | "directSellTransferViaGasStation"
+      | "gasStation"
       | "getAdminWallet"
+      | "getGasStation"
       | "getOrder"
       | "getOrderCounter"
       | "orders"
       | "removeAdmin"
+      | "removeGasStation"
+      | "setGasStation"
       | "usdtToken"
       | "verifyPayment"
       | "withdrawEmergency"
@@ -88,6 +98,7 @@ export interface P2PTradingInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "GasStationUpdated"
       | "OrderCompleted"
       | "OrderCreated"
       | "OrderVerified"
@@ -98,10 +109,18 @@ export interface P2PTradingInterface extends Interface {
     functionFragment: "addAdmin",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "addGasStation",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "admin", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "adminExecuteSellTransfer",
     values: [AddressLike, BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "adminTransferUSDTViaGasStation",
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "approveOrder",
@@ -109,6 +128,10 @@ export interface P2PTradingInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "authorizedAdmins",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "authorizedGasStations",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -128,15 +151,35 @@ export interface P2PTradingInterface extends Interface {
     values: [BigNumberish, BigNumberish, string]
   ): string;
   encodeFunctionData(
+    functionFragment: "createBuyOrderViaGasStation",
+    values: [AddressLike, BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "createSellOrder",
     values: [BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "createSellOrderViaGasStation",
+    values: [AddressLike, BigNumberish, BigNumberish, string]
   ): string;
   encodeFunctionData(
     functionFragment: "directSellTransfer",
     values: [BigNumberish, BigNumberish, string, AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "directSellTransferViaGasStation",
+    values: [AddressLike, BigNumberish, BigNumberish, string, AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "gasStation",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "getAdminWallet",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getGasStation",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -155,6 +198,14 @@ export interface P2PTradingInterface extends Interface {
     functionFragment: "removeAdmin",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "removeGasStation",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setGasStation",
+    values: [AddressLike]
+  ): string;
   encodeFunctionData(functionFragment: "usdtToken", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "verifyPayment",
@@ -166,9 +217,17 @@ export interface P2PTradingInterface extends Interface {
   ): string;
 
   decodeFunctionResult(functionFragment: "addAdmin", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "addGasStation",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "admin", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "adminExecuteSellTransfer",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "adminTransferUSDTViaGasStation",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -177,6 +236,10 @@ export interface P2PTradingInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "authorizedAdmins",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "authorizedGasStations",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -196,7 +259,15 @@ export interface P2PTradingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "createBuyOrderViaGasStation",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "createSellOrder",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "createSellOrderViaGasStation",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -204,7 +275,16 @@ export interface P2PTradingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "directSellTransferViaGasStation",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "gasStation", data: BytesLike): Result;
+  decodeFunctionResult(
     functionFragment: "getAdminWallet",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getGasStation",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getOrder", data: BytesLike): Result;
@@ -217,6 +297,14 @@ export interface P2PTradingInterface extends Interface {
     functionFragment: "removeAdmin",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "removeGasStation",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setGasStation",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "usdtToken", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "verifyPayment",
@@ -226,6 +314,22 @@ export interface P2PTradingInterface extends Interface {
     functionFragment: "withdrawEmergency",
     data: BytesLike
   ): Result;
+}
+
+export namespace GasStationUpdatedEvent {
+  export type InputTuple = [
+    oldGasStation: AddressLike,
+    newGasStation: AddressLike
+  ];
+  export type OutputTuple = [oldGasStation: string, newGasStation: string];
+  export interface OutputObject {
+    oldGasStation: string;
+    newGasStation: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace OrderCompletedEvent {
@@ -360,6 +464,12 @@ export interface P2PTrading extends BaseContract {
 
   addAdmin: TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
 
+  addGasStation: TypedContractMethod<
+    [_gasStation: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   admin: TypedContractMethod<[], [string], "view">;
 
   adminExecuteSellTransfer: TypedContractMethod<
@@ -373,6 +483,12 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
 
+  adminTransferUSDTViaGasStation: TypedContractMethod<
+    [_admin: AddressLike, _user: AddressLike, _usdtAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   approveOrder: TypedContractMethod<
     [_orderId: BigNumberish],
     [void],
@@ -380,6 +496,12 @@ export interface P2PTrading extends BaseContract {
   >;
 
   authorizedAdmins: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
+  authorizedGasStations: TypedContractMethod<
+    [arg0: AddressLike],
+    [boolean],
+    "view"
+  >;
 
   completeBuyOrder: TypedContractMethod<
     [_orderId: BigNumberish],
@@ -405,8 +527,30 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
 
+  createBuyOrderViaGasStation: TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   createSellOrder: TypedContractMethod<
     [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
+    [void],
+    "nonpayable"
+  >;
+
+  createSellOrderViaGasStation: TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
     [void],
     "nonpayable"
   >;
@@ -422,7 +566,23 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
 
+  directSellTransferViaGasStation: TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string,
+      _adminWallet: AddressLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  gasStation: TypedContractMethod<[], [string], "view">;
+
   getAdminWallet: TypedContractMethod<[], [string], "view">;
+
+  getGasStation: TypedContractMethod<[], [string], "view">;
 
   getOrder: TypedContractMethod<
     [_orderId: BigNumberish],
@@ -464,6 +624,18 @@ export interface P2PTrading extends BaseContract {
 
   removeAdmin: TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
 
+  removeGasStation: TypedContractMethod<
+    [_gasStation: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  setGasStation: TypedContractMethod<
+    [_newGasStation: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   usdtToken: TypedContractMethod<[], [string], "view">;
 
   verifyPayment: TypedContractMethod<
@@ -486,6 +658,9 @@ export interface P2PTrading extends BaseContract {
     nameOrSignature: "addAdmin"
   ): TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "addGasStation"
+  ): TypedContractMethod<[_gasStation: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "admin"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -501,10 +676,20 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "adminTransferUSDTViaGasStation"
+  ): TypedContractMethod<
+    [_admin: AddressLike, _user: AddressLike, _usdtAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "approveOrder"
   ): TypedContractMethod<[_orderId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "authorizedAdmins"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "authorizedGasStations"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "completeBuyOrder"
@@ -523,9 +708,33 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "createBuyOrderViaGasStation"
+  ): TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "createSellOrder"
   ): TypedContractMethod<
     [_usdtAmount: BigNumberish, _inrAmount: BigNumberish, _orderType: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "createSellOrderViaGasStation"
+  ): TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string
+    ],
     [void],
     "nonpayable"
   >;
@@ -542,7 +751,26 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "directSellTransferViaGasStation"
+  ): TypedContractMethod<
+    [
+      _user: AddressLike,
+      _usdtAmount: BigNumberish,
+      _inrAmount: BigNumberish,
+      _orderType: string,
+      _adminWallet: AddressLike
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "gasStation"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "getAdminWallet"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getGasStation"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "getOrder"
@@ -589,6 +817,12 @@ export interface P2PTrading extends BaseContract {
     nameOrSignature: "removeAdmin"
   ): TypedContractMethod<[_admin: AddressLike], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "removeGasStation"
+  ): TypedContractMethod<[_gasStation: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setGasStation"
+  ): TypedContractMethod<[_newGasStation: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "usdtToken"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
@@ -602,6 +836,13 @@ export interface P2PTrading extends BaseContract {
     "nonpayable"
   >;
 
+  getEvent(
+    key: "GasStationUpdated"
+  ): TypedContractEvent<
+    GasStationUpdatedEvent.InputTuple,
+    GasStationUpdatedEvent.OutputTuple,
+    GasStationUpdatedEvent.OutputObject
+  >;
   getEvent(
     key: "OrderCompleted"
   ): TypedContractEvent<
@@ -632,6 +873,17 @@ export interface P2PTrading extends BaseContract {
   >;
 
   filters: {
+    "GasStationUpdated(address,address)": TypedContractEvent<
+      GasStationUpdatedEvent.InputTuple,
+      GasStationUpdatedEvent.OutputTuple,
+      GasStationUpdatedEvent.OutputObject
+    >;
+    GasStationUpdated: TypedContractEvent<
+      GasStationUpdatedEvent.InputTuple,
+      GasStationUpdatedEvent.OutputTuple,
+      GasStationUpdatedEvent.OutputObject
+    >;
+
     "OrderCompleted(uint256,address,uint256)": TypedContractEvent<
       OrderCompletedEvent.InputTuple,
       OrderCompletedEvent.OutputTuple,

@@ -1,9 +1,10 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const [deployer] = await ethers.getSigners();
+  const [deployer, gasStation] = await ethers.getSigners();
   
   console.log("Deploying contracts with the account:", deployer.address);
+  console.log("Gas Station address:", gasStation.address);
   console.log("Account balance:", (await ethers.provider.getBalance(deployer.address)).toString());
 
   const network = await ethers.provider.getNetwork();
@@ -28,7 +29,7 @@ async function main() {
   const P2PTrading = await ethers.getContractFactory("P2PTrading");
   console.log("Deploying P2PTrading contract...");
   
-  const p2pTrading = await P2PTrading.deploy(usdtAddress);
+  const p2pTrading = await P2PTrading.deploy(usdtAddress, gasStation.address, {});
   
   // Wait for deployment to complete
   await p2pTrading.waitForDeployment();
@@ -40,6 +41,7 @@ async function main() {
   console.log("📄 USDT address:", usdtAddress);
   console.log("🌐 Network:", network.name);
   console.log("⛽ Deployer address:", deployer.address);
+  console.log("⛽ Gas Station address:", gasStation.address);
   
   // Test the deployed contract
   try {
@@ -65,6 +67,7 @@ async function main() {
     contractAddress: contractAddress,
     usdtAddress: usdtAddress,
     deployer: deployer.address,
+    gasStation: gasStation.address,
     timestamp: new Date().toISOString()
   };
   

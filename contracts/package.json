@@ -19,7 +19,12 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "clean": "hardhat clean"
+    "clean": "hardhat clean",
+    "generate-wallets": "npx hardhat run scripts/generate-wallets.ts",
+    "deploy:testnet": "npx hardhat run scripts/deploy.ts --network bscTestnet",
+    "deploy:mainnet": "npx hardhat run scripts/deploy.ts --network bsc",
+    "verify:testnet": "npx hardhat verify --network bscTestnet",
+    "verify:mainnet": "npx hardhat verify --network bsc"
   },
   "keywords": [],
   "author": "",
