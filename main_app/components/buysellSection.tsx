@@ -859,13 +859,7 @@ export default function BuySellSection() {
                         </span>
                       </div>
                       
-                      {/* BNB Gas Balance */}
-                      <div className="text-xs text-gray-500 mt-2">
-                        Gas: {walletData?.balances.bnb 
-                          ? `${parseFloat(walletData.balances.bnb.formatted).toFixed(4)} BNB`
-                          : '0.0000 BNB'
-                        }
-                      </div>
+                      
                     </>
                   )}
                 </div>

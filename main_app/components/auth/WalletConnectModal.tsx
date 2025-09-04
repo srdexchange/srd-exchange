@@ -72,6 +72,7 @@ export default function WalletConnectModal({
     "connect" | "authenticating" | "switching" | "success"
   >("connect");
   const [isMobile, setIsMobile] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Check if mobile on mount and resize
   useEffect(() => {
@@ -181,6 +182,11 @@ export default function WalletConnectModal({
   };
 
   const handleConnect = async (connector: any) => {
+    if (!acceptTerms) {
+      alert("Please accept the Terms and Conditions to continue.");
+      return;
+    }
+
     setSelectedConnector(connector.id);
     try {
       await connect({ connector });
@@ -308,7 +314,6 @@ export default function WalletConnectModal({
           />
 
           <motion.div
-            // Conditional positioning and sizing for mobile vs desktop
             className={`fixed bg-[#0A0A0A] z-[9999] overflow-y-auto border border-[#622DBF] ${
               isMobile
                 ? "bottom-0 mx-2 left-0 right-0 h-[85vh] rounded-t-3xl"
@@ -380,7 +385,7 @@ export default function WalletConnectModal({
                             }
                           }}
                           disabled={
-                            status === "pending" || isLoading || !connector
+                            status === "pending" || isLoading || !connector || !acceptTerms
                           }
                           className={`w-full bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group disabled:opacity-50 ${
                             isMobile ? "p-3" : "p-4 sm:p-3"
@@ -463,7 +468,8 @@ export default function WalletConnectModal({
                   {/* Show All Wallets Button */}
                   <motion.button
                     onClick={() => setShowAllWallets(true)}
-                    className={`w-full mt-2 sm:mt-2 bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group ${
+                    disabled={!acceptTerms}
+                    className={`w-full mt-2 sm:mt-2 bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group disabled:opacity-50 ${
                       isMobile ? "p-3" : "p-2 sm:p-2"
                     }`}
                     whileHover={{ scale: 1.02 }}
@@ -519,7 +525,8 @@ export default function WalletConnectModal({
                         onClick={() => handleConnect(connector)}
                         disabled={
                           status === "pending" ||
-                          selectedConnector === connector.id
+                          selectedConnector === connector.id ||
+                          !acceptTerms
                         }
                         className={`w-full flex items-center justify-between bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-lg transition-all duration-200 disabled:opacity-50 ${
                           isMobile ? "p-3" : "p-3 sm:p-4"
@@ -555,8 +562,10 @@ export default function WalletConnectModal({
                 </>
               )}
 
+              {/* Phone Number/Email Coming Soon */}
               <motion.button
-                className={`w-full mt-2 sm:mt-2 bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group ${
+                disabled={!acceptTerms}
+                className={`w-full mt-2 sm:mt-2 bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group disabled:opacity-50 ${
                   isMobile ? "p-3" : "p-2 sm:p-3"
                 }`}
                 whileHover={{ scale: 1.02 }}
@@ -581,6 +590,65 @@ export default function WalletConnectModal({
                   <span className="text-green-500">Coming Soon</span>
                 </div>
               </motion.button>
+
+              {/* Terms and Conditions Checkbox */}
+              <motion.div 
+                className={`mt-4 ${isMobile ? "mt-3" : "mt-4"}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
+              >
+                <motion.label 
+                  className="flex items-start space-x-3 cursor-pointer group"
+                  whileHover={{ x: 2 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <motion.div 
+                    className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all mt-0.5 ${
+                      acceptTerms 
+                        ? 'bg-[#622DBF] border-[#622DBF]' 
+                        : 'bg-[#1E1C1C] border-[#3E3E3E] group-hover:border-[#622DBF]/50'
+                    }`}
+                    onClick={() => setAcceptTerms(!acceptTerms)}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <AnimatePresence>
+                      {acceptTerms && (
+                        <motion.svg 
+                          className="w-3 h-3 text-white" 
+                          fill="currentColor" 
+                          viewBox="0 0 20 20"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </motion.svg>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                  <div className="flex-1">
+                    <span 
+                      className={`font-medium font-montserrat transition-colors ${
+                        isMobile ? "text-sm" : "text-sm sm:text-base"
+                      } ${acceptTerms ? "text-white" : "text-gray-300 group-hover:text-white"}`}
+                    >
+                      I accept the{" "}
+                      <button
+                        type="button"
+                        className="text-[#622DBF] hover:text-[#8B5CF6] underline transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open('/terms-and-conditions', '_blank');
+                        }}
+                      >
+                        Terms and Conditions
+                      </button>
+                    </span>
+                  </div>
+                </motion.label>
+              </motion.div>
 
               {/* Benefits Section */}
               <div

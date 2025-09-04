@@ -57,7 +57,7 @@ export default function SellCDMModal({
     }
   }
 
-  // Helper function to calculate rupees from USDT (same as buysellSection.tsx)
+
   const calculateRupeeFromUSDT = (usdtAmount: string, sellRate: number) => {
     const numericAmount = parseFloat(usdtAmount)
     if (isNaN(numericAmount) || numericAmount <= 0) return '0'
@@ -299,27 +299,27 @@ export default function SellCDMModal({
               </button>
             </div>
 
-            {/* Scrollable Main Content */}
+
             <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
               <div className="p-4 text-center">
-                {/* Enhanced Amount Display */}
+           
                 <div className="mb-6">
-                  {/* Primary Amount - USDT being sold */}
+               
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
                     {parseFloat(displayUsdtAmount).toFixed(4)} USDT
                   </div>
                   
-                  {/* Secondary Amount - Rupees to receive */}
+                 
                   <div className="text-2xl md:text-2xl font-medium text-green-400 mb-2">
                     You'll receive ₹{parseFloat(displayRupeeAmount).toFixed(2)}
                   </div>
-                  
-                  {/* Enhanced conversion info */}
+               
+
                   <div className="text-xs text-gray-400 mb-2">
                     Selling {parseFloat(displayUsdtAmount).toFixed(4)} USDT • Getting ₹{parseFloat(displayRupeeAmount).toFixed(2)} INR
                   </div>
                   
-                  {/* Rate Display - Show current API rate */}
+
                   <div className="text-xs text-gray-500 mb-2">
                     {ratesLoading ? (
                       'Loading rate...'
@@ -331,14 +331,7 @@ export default function SellCDMModal({
                     )}
                   </div>
                   
-                  {/* Order Info */}
-                  {orderData && (
-                    <div className="text-xs text-gray-500 mb-4">
-                      Order ID: {orderData.fullId || orderData.id} • 
-                      Created: {new Date(orderData.createdAt).toLocaleString()} •
-                      Type: {orderData.orderType} • Method: {paymentMethod}
-                    </div>
-                  )}
+                 
                   
                   <div className="flex items-center justify-center">
                     <svg
@@ -402,15 +395,15 @@ export default function SellCDMModal({
                   </div>
                 )}
 
-               
                 <div className="px-4 md:px-0">
-                {isWaitingConfirmation && !isMoneyReceived && (
-                    <div className="mb-4 p-3 rounded-lg">
-                      <div className="text-sm text-yellow-400 font-medium text-center">
-                        ⚠️ Only press the button below when you can confirm that you got money in your bank account
+                  {isWaitingConfirmation && !isMoneyReceived && (
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <div className="text-sm text-red-400 font-medium text-center">
+                        ⚠️ By clicking "I Confirm," you Release USDT and Received INR. No reversal after this!
                       </div>
                     </div>
                   )}
+                  
                   <button
                     onClick={
                       isMoneyReceived
@@ -430,7 +423,7 @@ export default function SellCDMModal({
                       ) : isWaitingConfirmation ? (
                         <>
                           <Check className="w-5 h-5" />
-                          <span>Money Received on Account</span>
+                          <span>I Confirm, INR Received</span>
                         </>
                       ) : (
                         <>

@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAccount, useDisconnect } from "wagmi";
 import { useModal } from "@/contexts/ModalContext";
 import { LogOut, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -14,6 +15,7 @@ export default function Navbar() {
   const { isConnected, address } = useAccount();
   const { openWalletModal } = useModal();
   const { disconnect } = useDisconnect();
+  const router = useRouter();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -25,6 +27,17 @@ export default function Navbar() {
 
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offsetTop = element.offsetTop - 80;
+      window.scrollTo({
+        top: offsetTop,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const handleConnectWallet = () => {
     if (!isConnected) {
@@ -46,23 +59,52 @@ export default function Navbar() {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const navLinks = ["Futures Trading", "FAQ", "Contact us"];
+  const navLinks = [
+    { name: "Future Tradings", type: "route", path: "/future-tradings" },
+    { name: "FAQ", type: "scroll", id: "faq" },
+    { name: "Contact us", type: "scroll", id: "contact" }
+  ];
+
+  const handleNavClick = (link: { name: string; type: string; path?: string; id?: string }) => {
+    if (link.type === "route" && link.path) {
+      router.push(link.path);
+    } else if (link.type === "scroll") {
+      if (link.name === "Contact us") {
+        const footer = document.querySelector('footer');
+        if (footer) {
+          footer.scrollIntoView({ behavior: 'smooth' });
+        }
+      } else if (link.id) {
+        scrollToSection(link.id);
+      }
+    }
+
+    if (isMobileMenuOpen) {
+      setIsMobileMenuOpen(false);
+    }
+  };
 
   return (
     <>
       <motion.nav
-        className="w-full bg-black text-white px-4 sm:px-8 py-2 border-b border-gray-800 relative z-40 font-montserrat"
+        className="w-full bg-black text-white px-4 sm:px-8 py-2 border-b border-gray-800 z-40 font-montserrat relative top-0 left-0 right-0"
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
         <div className="flex items-center justify-between w-full">
-          {/* Logo Section - Far Left */}
           <motion.div
-            className="flex items-center space-x-2"
+            className="flex items-center space-x-2 cursor-pointer"
             initial={{ x: -50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
+            onClick={() => {
+              if (window.location.pathname === '/') {
+                scrollToSection('home');
+              } else {
+                router.push('/');
+              }
+            }}
           >
             <div>
               <Image
@@ -83,32 +125,29 @@ export default function Navbar() {
             </motion.span>
           </motion.div>
 
-          {/* Desktop Navigation - Hidden on Mobile */}
           <motion.div
             className="hidden lg:flex items-center space-x-6"
             initial={{ x: 50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            {/* Navigation Links */}
             <div className="flex items-center space-x-8">
               {navLinks.map((link, index) => (
-                <motion.a
-                  key={link}
-                  href="#"
-                  className="text-base font-medium text-gray-300 hover:text-white transition-colors duration-200 relative group font-montserrat"
+                <motion.button
+                  key={link.name}
+                  onClick={() => handleNavClick(link)}
+                  className="text-base font-medium text-gray-300 hover:text-white transition-colors duration-200 relative group font-montserrat cursor-pointer"
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 + index * 0.1 }}
                   whileHover={{ y: -2 }}
                 >
-                  {link}
+                  {link.name}
                   <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-purple-500 transition-all duration-200 group-hover:w-full"></span>
-                </motion.a>
+                </motion.button>
               ))}
             </div>
 
-            {/* Connect Wallet & Social Section */}
             <div className="flex items-center space-x-4">
               {isConnected && address ? (
                 <div className="relative">
@@ -124,7 +163,6 @@ export default function Navbar() {
                     </span>
                   </motion.button>
 
-                  {/* User Dropdown Menu */}
                   <AnimatePresence>
                     {showUserMenu && (
                       <motion.div
@@ -187,7 +225,6 @@ export default function Navbar() {
                 </motion.button>
               )}
 
-              {/* Social Icons */}
               <motion.div
                 className="flex pl-10 items-center space-x-2"
                 initial={{ opacity: 0, scale: 0 }}
@@ -199,9 +236,10 @@ export default function Navbar() {
                   damping: 20,
                 }}
               >
-                {/* Twitter/X Icon */}
                 <motion.a
-                  href="#"
+                  href="https://x.com/SrdExchange"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-9 h-9 flex items-center justify-center transition-all duration-200 hover:scale-110"
                   whileHover={
                     !isMobile
@@ -219,9 +257,10 @@ export default function Navbar() {
                   </svg>
                 </motion.a>
 
-                {/* Telegram Icon */}
                 <motion.a
-                  href="#"
+                  href="https://telegram.me/SrdExchangeGlobal"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
                   whileHover={
                     !isMobile
@@ -244,18 +283,17 @@ export default function Navbar() {
             </div>
           </motion.div>
 
-          {/* Mobile Right Section - Social Icons + Hamburger */}
           <motion.div
             className="flex lg:hidden items-center space-x-3"
             initial={{ x: 50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            {/* Mobile Social Icons */}
             <div className="flex items-center space-x-2">
-              {/* Twitter/X Icon */}
               <a
                 href="https://x.com/SrdExchange"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-8 h-8 flex items-center justify-center transition-all duration-200"
               >
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -263,16 +301,16 @@ export default function Navbar() {
                 </svg>
               </a>
 
-              {/* Telegram Icon */}
               <a
-                href="https://telegram.me/SrdExchange"
+                href="https://telegram.me/SrdExchangeGlobal"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200"
               >
                 <img src="/telegram.svg" alt="" className="w-5 h-5" />
               </a>
             </div>
 
-            {/* Hamburger Menu Button */}
             <button
               onClick={toggleMobileMenu}
               className="text-white p-2 hover:bg-gray-800 rounded-lg transition-colors duration-200"
@@ -295,11 +333,9 @@ export default function Navbar() {
         </div>
       </motion.nav>
 
-      {/* Mobile Sidebar */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
               initial={{ opacity: 0 }}
@@ -308,7 +344,6 @@ export default function Navbar() {
               onClick={() => setIsMobileMenuOpen(false)}
             />
 
-            {/* Sidebar */}
             <motion.div
               className="fixed top-0 right-0 h-full w-80 bg-black border-l border-gray-800 z-50 lg:hidden font-montserrat"
               initial={{ x: 320 }}
@@ -317,7 +352,6 @@ export default function Navbar() {
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
             >
               <div className="flex flex-col h-full">
-                {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-800">
                   <h2 className="text-xl font-bold text-white font-montserrat">
                     Menu
@@ -342,26 +376,23 @@ export default function Navbar() {
                   </button>
                 </div>
 
-                {/* Navigation Links */}
                 <div className="flex-1 p-6">
                   <nav className="space-y-4">
                     {navLinks.map((link, index) => (
-                      <motion.a
-                        key={link}
-                        href="#"
-                        className="block text-lg font-montserrat font-medium text-gray-300 hover:text-white py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors duration-200 font-montserrat"
+                      <motion.button
+                        key={link.name}
+                        onClick={() => handleNavClick(link)}
+                        className="block w-full text-left text-lg font-montserrat font-medium text-gray-300 hover:text-white py-3 px-4 rounded-lg hover:bg-gray-800 transition-colors duration-200"
                         initial={{ opacity: 0, x: 50 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.1 }}
-                        onClick={() => setIsMobileMenuOpen(false)}
                       >
-                        {link}
-                      </motion.a>
+                        {link.name}
+                      </motion.button>
                     ))}
                   </nav>
                 </div>
 
-                {/* Connect Wallet Button */}
                 <div className="p-6 border-t border-gray-800">
                   {!isConnected || !address ? (
                     <motion.button

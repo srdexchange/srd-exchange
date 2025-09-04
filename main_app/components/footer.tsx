@@ -30,7 +30,7 @@ export default function Footer() {
       transition={{ duration: 0.6 }}
       viewport={{ once: true }}
     >
-      <div className="max-w-7xl mx-auto px-8 py-8 bg-[#0C0C0C] rounded-xl">
+      <div className="max-w-7xl mx-auto px-8 mb-10 py-8 bg-[#0C0C0C] rounded-xl">
         
         {/* Mobile Layout - Center Aligned */}
         <div className="block md:hidden">

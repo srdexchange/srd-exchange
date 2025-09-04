@@ -393,8 +393,8 @@ export default function BuyUPIModal({
                       Please pay ₹{paymentDetails?.customAmount || displayAmount} to admin's UPI ID
                     </div>
                     <div className="text-[#26AF6C] text-xs flex items-center justify-center mb-4">
-                      <TriangleAlert className="w-3 h-3 mr-1" />
-                      Pay only to the admin's UPI ID provided below
+                       
+                      ⚠️ Pay Only Through Registered UPI
                     </div>
                     {/* Show rate information */}
                     {paymentDetails?.customAmount && (

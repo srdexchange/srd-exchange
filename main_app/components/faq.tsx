@@ -240,6 +240,7 @@ export function Footer() {
 
   return (
     <motion.footer 
+      id="contact" // 🔥 ADD: Contact section ID
       className="bg-black text-white border-gray-800"
       initial={{ opacity: 0, y: 50 }}
       whileInView={{ opacity: 1, y: 0 }}

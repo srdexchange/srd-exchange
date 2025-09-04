@@ -231,50 +231,7 @@ export default function SellUPIModal({
                       </>
                     )}
                   </div>
-                  
-                  {/* Order Info */}
-                  {orderData && (
-                    <div className="text-xs text-gray-500 mb-4">
-                      Order ID: {orderData.fullId || orderData.id} • 
-                      Created: {new Date(orderData.createdAt).toLocaleString()} •
-                      Type: {orderData.orderType} • Method: {paymentMethod}
-                    </div>
-                  )}
 
-                  {/* Blockchain Status for Sell Orders */}
-                  {orderData && orderData.orderType.includes('SELL') && (
-                    <div className="mb-4 p-3 rounded-lg">
-                      <div className="text-sm text-green-400 font-medium mb-1">
-                        ✅ USDT Secured in Smart Contract
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {parseFloat(displayUsdtAmount || '0').toFixed(4)} USDT has been transferred to the smart contract and is held securely until payment is confirmed.
-                      </div>
-                      {orderData.blockchainOrderId && (
-                        <div className="text-xs text-blue-400 mt-1">
-                          Blockchain Order ID: #{orderData.blockchainOrderId}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Blockchain Status for Sell Orders */}
-                  {orderData && orderData.orderType.includes('SELL') && orderData.status === 'PENDING_ADMIN_PAYMENT' && (
-                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <div className="text-sm text-green-400 font-medium mb-1">
-                        ✅ USDT Transferred to Admin
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {parseFloat(displayUsdtAmount || '0').toFixed(4)} USDT has been successfully transferred to admin wallet. Waiting for payment confirmation.
-                      </div>
-                      {orderData.blockchainOrderId && (
-                        <div className="text-xs text-blue-400 mt-1">
-                          Blockchain Order ID: #{orderData.blockchainOrderId}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
                   <div className="flex items-center justify-center">
                     <svg
                       className="w-5 h-5 text-white mr-2"
@@ -344,13 +301,15 @@ export default function SellUPIModal({
                 )}
 
                 <div className="px-4 md:px-0">
-                {isWaitingConfirmation && !isMoneyReceived && (
-                    <div className="mb-4 p-3 rounded-lg">
-                      <div className="text-sm text-yellow-400 font-medium text-center">
-                        ⚠️ Only press the button below when you can confirm that you got money in your bank account
+                  {/* 🔥 ADD: Warning message before confirmation button */}
+                  {isWaitingConfirmation && !isMoneyReceived && (
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                      <div className="text-sm text-red-400 font-medium text-center">
+                        ⚠️ By clicking "I Confirm," you Release USDT and Received INR. No reversal after this!
                       </div>
                     </div>
                   )}
+                  
                   <button
                     onClick={
                       isMoneyReceived
@@ -370,7 +329,7 @@ export default function SellUPIModal({
                       ) : isWaitingConfirmation ? (
                         <>
                           <Check className="w-5 h-5" />
-                          <span>Money Received on Account</span>
+                          <span>I confirm, INR Received</span>
                         </>
                       ) : (
                         <>
