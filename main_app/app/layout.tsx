@@ -13,7 +13,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "SRD Exchange - P2P USDT Trading",
+  title: "Srd Exchange - Decentralized P2P Platform on Bsc Chain",
   description: "Secure peer-to-peer USDT trading platform on Binance Smart Chain",
 };
 
