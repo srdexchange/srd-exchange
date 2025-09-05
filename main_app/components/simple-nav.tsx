@@ -13,7 +13,7 @@ export default function SimpleNav() {
             alt="SRD Exchange Logo"
             width={10}
             height={10}
-            className="w-16 h-16 object-contain"
+            className="w-20 h-20 object-contain"
           />
           <span className="text-xl font-bold  tracking-tight hidden md:flex md:flex-row">
             SRD Exchange
