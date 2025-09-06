@@ -208,7 +208,7 @@ export default function CompleteProfilePage() {
               animate={{ scale: 1 }}
               className="w-16 h-16 md:w-20 md:h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6"
             >
-              <img src="/srd_final" alt="" className="w-48 h-48"/>
+              <img src="/srd_final.svg" alt="" className="w-48 h-48"/>
             </motion.div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 font-montserrat px-4">
               Profile Completed!

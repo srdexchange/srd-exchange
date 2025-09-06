@@ -287,38 +287,7 @@ export default function FutureTradingPage() {
             />
           </motion.div>
 
-          {/* Build Progress */}
-          <motion.div 
-            className="mt-8 text-gray-500 font-montserrat"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 2 }}
-          >
-            <p className="text-sm">Development in progress...</p>
-            
-            {/* Progress Bar */}
-            <motion.div 
-              className="w-64 h-2 bg-gray-800 rounded-full mx-auto mt-4 overflow-hidden"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, delay: 2.2 }}
-            >
-              <motion.div 
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
-                initial={{ width: "0%" }}
-                animate={{ width: "65%" }}
-                transition={{ duration: 2, delay: 2.5, ease: "easeOut" }}
-              />
-            </motion.div>
-            <motion.p 
-              className="text-xs mt-2 text-purple-400"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 4.5 }}
-            >
-              65% Complete
-            </motion.p>
-          </motion.div>
+        
         </motion.div>
       </div>
     </div>

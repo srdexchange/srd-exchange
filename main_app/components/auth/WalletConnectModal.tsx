@@ -635,8 +635,8 @@ export default function WalletConnectModal({
                       } ${acceptTerms ? "text-white" : "text-gray-300 group-hover:text-white"}`}
                     >
                       I accept the{" "}
-                      <button
-                        type="button"
+                      <a
+                       
                         className="text-[#622DBF] hover:text-[#8B5CF6] underline transition-colors"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -644,7 +644,7 @@ export default function WalletConnectModal({
                         }}
                       >
                         Terms and Conditions
-                      </button>
+                      </a>
                     </span>
                   </div>
                 </motion.label>
