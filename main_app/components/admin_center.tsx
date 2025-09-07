@@ -446,7 +446,6 @@ export default function AdminCenter() {
       const order = orders[orderIndex];
       const buyRate = getBuyRate(order.currency as "UPI" | "CDM");
 
-      // 🔥 FIX: Calculate actual USDT amount for this order
       const usdtAmountToTransfer = order.usdtAmount
         ? order.usdtAmount.toString()
         : (order.amount / buyRate).toFixed(6);
