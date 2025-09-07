@@ -619,7 +619,6 @@ export default function AdminCenter() {
               calculation: `${order.amount} INR ÷ ${buyRate} rate = ${usdtAmountToTransfer} USDT`,
             });
 
-            // 🔥 IMPORTANT: Validate the calculated amount
             const transferAmount = parseFloat(usdtAmountToTransfer);
             if (transferAmount <= 0 || isNaN(transferAmount)) {
               throw new Error(
@@ -1116,15 +1115,12 @@ export default function AdminCenter() {
               secondaryAmount = `${usdtAmount} USDT`;
               rateDisplay = `₹${buyRate}/USDT`;
             } else {
-              // For SELL orders: Use the same logic as admin_left_side.tsx
               if (order.usdtAmount) {
-                // If usdtAmount exists, use it as the USDT amount
                 primaryAmount = `${parseFloat(
                   order.usdtAmount.toString()
                 ).toFixed(2)} USDT`;
                 secondaryAmount = `₹${order.amount}`;
               } else {
-                // If no usdtAmount, calculate from order.amount (fallback)
                 const usdtAmount = (order.amount / sellRate).toFixed(4);
                 primaryAmount = `${usdtAmount} USDT`;
                 secondaryAmount = `₹${order.amount}`;
@@ -1132,7 +1128,6 @@ export default function AdminCenter() {
               rateDisplay = `₹${sellRate}/USDT`;
             }
 
-            // 🔥 ADD: Check if this order has a user money notification
             const hasUserMoneyNotification =
               userMoneyNotifications[order.fullId || order.id];
 
@@ -1166,7 +1161,6 @@ export default function AdminCenter() {
                   </div>
                 )}
 
-                {/* 🔥 ADD: User Money Received Notification - Only for SELL orders */}
                 {hasUserMoneyNotification &&
                   order.orderType.includes("SELL") && (
                     <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg animate-pulse">
@@ -1365,29 +1359,6 @@ export default function AdminCenter() {
                     </button>
                   ))}
                 </div>
-
-                {order.orderType.includes("SELL") &&
-                  userMoneyNotifications[order.fullId || order.id] && (
-                    <div className="mt-3 p-2 bg-green-500/20 border border-green-500/30 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className="text-green-400 font-medium text-sm">
-                           User received money in their account
-                        </span>
-                      </div>
-                      <div className="text-green-300 text-xs mt-1 ml-4">
-                        Amount: ₹
-                        {
-                          userMoneyNotifications[order.fullId || order.id]
-                            .amount
-                        }{" "}
-                        • Time:{" "}
-                        {userMoneyNotifications[
-                          order.fullId || order.id
-                        ].timestamp.toLocaleTimeString()}
-                      </div>
-                    </div>
-                  )}
 
                 {selectedOrderIndex !== index && (
                   <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
