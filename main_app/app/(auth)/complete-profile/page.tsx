@@ -7,13 +7,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
   ChevronUp,
-  CreditCard,
   Building,
   User,
   FileText,
   MapPin,
   ArrowRight,
-  CheckCircle2,
   Check,
   AlertTriangle,
 } from "lucide-react";
