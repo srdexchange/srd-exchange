@@ -41,7 +41,7 @@ model BankDetails {
 model Order {
   id                    String      @id @default(cuid())
   userId                String
-  blockchainOrderId     String?     // Blockchain order ID
+  blockchainOrderId     String?    
   user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   amount                Decimal
   usdtAmount            Decimal?
@@ -54,10 +54,11 @@ model Order {
   adminNotes            String?
   buyRate               Decimal?
   sellRate              Decimal?
-  // Blockchain tracking
+  userConfirmedReceived Boolean     @default(false)
+  userConfirmedAt       DateTime?  
   isVerifiedOnChain     Boolean     @default(false)
   isCompletedOnChain    Boolean     @default(false)
-  transactionHash       String?     // Transaction hash for USDT transfer
+  transactionHash       String?     
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   
@@ -70,11 +71,11 @@ model Rate {
   currency    CurrencyType @default(UPI)
   buyRate     Decimal
   sellRate    Decimal
-  updatedBy   String      // Admin user ID who updated the rate
+  updatedBy   String      
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   
-  @@unique([type, currency]) // Only one rate per type-currency combination
+  @@unique([type, currency]) 
   @@map("rates")
 }
 

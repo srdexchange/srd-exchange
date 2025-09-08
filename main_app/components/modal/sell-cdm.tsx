@@ -192,54 +192,110 @@ export default function SellCDMModal({
     console.log("✅ Waiting for confirmation clicked");
   };
 
-  const handleMoneyReceived = async () => {
-    try {
-      console.log("🔗 Completing sell order on blockchain...");
-      if (orderData?.blockchainOrderId) {
-        await completeSellOrderOnChain(parseInt(orderData.blockchainOrderId));
-      }
-      setIsMoneyReceived(true);
-      setIsCoinSent(true);
 
-      // 🔥 ADD: Broadcast event to admin center
-      if (orderData) {
-        window.dispatchEvent(
-          new CustomEvent("userReceivedMoney", {
-            detail: {
-              orderId: orderData.fullId || orderData.id,
-              orderType: orderData.orderType,
-              amount: displayRupeeAmount,
-              timestamp: new Date().toISOString(),
+  // In both sell-cdm.tsx and sell-upi.tsx, update the handleMoneyReceived function:
+
+const handleMoneyReceived = async () => {
+  try {
+    console.log('🔗 Completing sell order on blockchain...');
+    if (orderData?.blockchainOrderId) {
+      await completeSellOrderOnChain(parseInt(orderData.blockchainOrderId));
+    }
+    setIsMoneyReceived(true);
+    setIsCoinSent(true);
+    
+    // 🔥 CRITICAL: Update database to mark user has confirmed receiving money
+    if (orderData) {
+      try {
+        console.log(
+          '💾 Updating database - user confirmed money received for order:',
+          orderData.fullId || orderData.id
+        );
+        
+        const response = await fetch(
+          `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
             },
-          })
+            body: JSON.stringify({
+              userConfirmedReceived: true,
+              userConfirmedAt: new Date().toISOString(),
+            }),
+          }
         );
 
-        console.log("📢 Broadcasted user money received event:", {
-          orderId: orderData.fullId || orderData.id,
-          amount: displayRupeeAmount,
-        });
-      }
-
-      console.log("💰 Money Received on Account clicked");
-    } catch (error) {
-      console.error("❌ Error completing sell order on blockchain:", error);
-      setIsMoneyReceived(true);
-      setIsCoinSent(true);
-
-      if (orderData) {
-        window.dispatchEvent(
-          new CustomEvent("userReceivedMoney", {
-            detail: {
-              orderId: orderData.fullId || orderData.id,
-              orderType: orderData.orderType,
-              amount: displayRupeeAmount,
-              timestamp: new Date().toISOString(),
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log('✅ Database updated - user confirmed money received');
+          
+          // 🔥 BROADCAST: Notify admin center to refresh orders
+          window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
+            detail: { 
+              orderId: orderData.fullId || orderData.id, 
+              action: 'userConfirmedReceived',
+              userConfirmedReceived: true
             },
-          })
-        );
+            bubbles: true,
+            cancelable: true
+          }));
+          
+        } else {
+          console.error('❌ Failed to update database:', result.error);
+          alert('Failed to update order status. Please try again.');
+        }
+      } catch (dbError) {
+        console.error('❌ Database update error:', dbError);
+        alert('Failed to connect to database. Please try again.');
       }
     }
-  };
+    
+    console.log("💰 Money Received on Account clicked");
+  } catch (error) {
+    console.error('❌ Error completing sell order on blockchain:', error);
+    setIsMoneyReceived(true);
+    setIsCoinSent(true);
+    
+    // Still try to update database even if blockchain operation fails
+    if (orderData) {
+      try {
+        const response = await fetch(
+          `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userConfirmedReceived: true,
+              userConfirmedAt: new Date().toISOString(),
+            }),
+          }
+        );
+
+        const result = await response.json();
+        if (result.success) {
+          console.log('✅ Database updated despite blockchain error');
+          
+          // Broadcast database update event
+          window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
+            detail: { 
+              orderId: orderData.fullId || orderData.id, 
+              action: 'userConfirmedReceived',
+              userConfirmedReceived: true
+            },
+            bubbles: true,
+            cancelable: true
+          }));
+        }
+      } catch (dbError) {
+        console.error('❌ Database update failed:', dbError);
+      }
+    }
+  }
+};
 
   const handleOrderComplete = () => {
     if (orderData) {

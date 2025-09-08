@@ -3,7 +3,6 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-// Simple admin verification function
 async function verifyAdminAccess(request: NextRequest) {
   try {
     const walletAddress = request.headers.get('x-wallet-address')
@@ -37,16 +36,15 @@ async function verifyAdminAccess(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin access first
     const adminCheck = await verifyAdminAccess(request)
     if (adminCheck instanceof NextResponse) {
-      return adminCheck // Return error response
+      return adminCheck 
     }
 
     console.log('Admin orders API called by admin:', adminCheck.user.walletAddress);
     
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status') // 'pending', 'completed', 'rejected'
+    const status = searchParams.get('status')
     
     console.log('Status filter:', status);
     
@@ -67,34 +65,69 @@ export async function GET(request: NextRequest) {
         whereClause = { status: 'CANCELLED' }
         break
       default:
-        // If no status specified, return all orders
         break
     }
 
     console.log('Where clause:', whereClause);
 
+    // 🔥 FIX: Use only select, not include + select together
     const orders = await prisma.order.findMany({
       where: whereClause,
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        blockchainOrderId: true,
+        amount: true,
+        usdtAmount: true,
+        customAmount: true,
+        orderType: true,
+        status: true,
+        paymentProof: true,
+        adminUpiId: true,
+        adminBankDetails: true,
+        adminNotes: true,
+        buyRate: true,
+        sellRate: true,
+        // 🔥 NEW: Include the user confirmation fields
+        userConfirmedReceived: true,
+        userConfirmedAt: true,
+        isVerifiedOnChain: true,
+        isCompletedOnChain: true,
+        transactionHash: true,
+        createdAt: true,
+        updatedAt: true,
+        // 🔥 FIX: Select user fields explicitly
         user: {
           select: {
             id: true,
             walletAddress: true,
             upiId: true,
-            bankDetails: true
+            bankDetails: {
+              select: {
+                accountNumber: true,
+                ifscCode: true,
+                branchName: true,
+                accountHolderName: true
+              }
+            }
           }
         }
       },
       orderBy: {
         createdAt: 'desc'
       }
-    })
+    });
 
     console.log('Found orders:', orders.length);
+    console.log('Orders with user confirmation:', orders.map(o => ({
+      id: o.id,
+      orderType: o.orderType,
+      userConfirmedReceived: o.userConfirmedReceived,
+      userConfirmedAt: o.userConfirmedAt
+    })));
 
-    // Transform orders to match frontend expected format
     const transformedOrders = orders.map(order => ({
-      id: `#${order.id.slice(-6)}`, // Show last 6 characters of order ID
+      id: `#${order.id.slice(-6)}`, 
       fullId: order.id,
       blockchainOrderId: order.blockchainOrderId,
       time: formatTime(order.createdAt),
@@ -108,6 +141,9 @@ export async function GET(request: NextRequest) {
       adminUpiId: order.adminUpiId,
       adminBankDetails: order.adminBankDetails,
       adminNotes: order.adminNotes,
+      // 🔥 CRITICAL: Include the new database fields properly
+      userConfirmedReceived: order.userConfirmedReceived || false,
+      userConfirmedAt: order.userConfirmedAt ? order.userConfirmedAt.toISOString() : null,
       user: {
         id: order.user.id,
         walletAddress: order.user.walletAddress,
@@ -116,9 +152,15 @@ export async function GET(request: NextRequest) {
       },
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
-    }))
+    }));
 
-    console.log('Transformed orders:', transformedOrders.length);
+    console.log('Transformed orders with confirmations:', transformedOrders.map(o => ({
+      id: o.id,
+      fullId: o.fullId,
+      orderType: o.orderType,
+      userConfirmedReceived: o.userConfirmedReceived,
+      userConfirmedAt: o.userConfirmedAt
+    })));
 
     return NextResponse.json({
       success: true,

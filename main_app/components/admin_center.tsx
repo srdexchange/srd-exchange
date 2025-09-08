@@ -29,6 +29,8 @@ interface Order {
   adminUpiId?: string;
   adminBankDetails?: string;
   blockchainOrderId?: number;
+  userConfirmedReceived?: boolean;
+  userConfirmedAt?: string;
   user: {
     id: string;
     walletAddress: string;
@@ -39,10 +41,10 @@ interface Order {
 
 const CONTRACTS = {
   USDT: {
-    [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, // BSC Mainnet USDT
+    [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, 
   },
   P2P_TRADING: {
-    [56]: "0xD64d78dCFc550F131813a949c27b2b439d908F54" as `0x${string}`, // Mainnet only
+    [56]: "0xD64d78dCFc550F131813a949c27b2b439d908F54" as `0x${string}`,
   },
 };
 
@@ -195,6 +197,47 @@ export default function AdminCenter() {
     };
   }>({});
 
+// In admin_center.tsx, update the database update event listener:
+
+useEffect(() => {
+  const handleDatabaseUpdate = (event: CustomEvent) => {
+    const { orderId, action, userConfirmedReceived } = event.detail;
+    
+    console.log('🔄 Database update received in admin center:', {
+      orderId,
+      action,
+      userConfirmedReceived
+    });
+    
+    if (action === 'userConfirmedReceived') {
+      console.log('💾 User confirmed money received - updating orders state');
+
+      // Update local state immediately
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          (order.fullId === orderId || order.id === orderId)
+            ? { 
+                ...order, 
+                userConfirmedReceived: true,
+                userConfirmedAt: new Date().toISOString()
+              }
+            : order
+        )
+      );
+  
+      setTimeout(() => {
+        console.log('🔄 Refreshing orders from database');
+        fetchAcceptedOrders();
+      }, 2000); 
+    }
+  };
+
+  window.addEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
+
+  return () => {
+    window.removeEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
+  };
+}, []);
   useEffect(() => {
     if (chainId && chainId !== 56) {
       console.warn(
@@ -274,43 +317,61 @@ export default function AdminCenter() {
     const handleUserReceivedMoney = (event: CustomEvent) => {
       const { orderId, orderType, amount, timestamp } = event.detail;
 
-      console.log("💰 User received money notification:", {
+      console.log("💰 Admin Center received user money notification:", {
         orderId,
         orderType,
         amount,
         timestamp,
+        currentOrders: orders.map(o => ({ id: o.id, fullId: o.fullId, orderType: o.orderType }))
       });
 
-      setUserMoneyNotifications((prev) => ({
-        ...prev,
-        [orderId]: {
-          message: "User got money in the bank",
-          timestamp: new Date(timestamp),
-          amount: amount,
-        },
-      }));
+      // 🔥 ENHANCED: More flexible order ID matching
+      const matchingOrder = orders.find(order => 
+        order.fullId === orderId || 
+        order.id === orderId ||
+        order.fullId?.includes(orderId) ||
+        orderId?.includes(order.fullId)
+      );
 
-      setTimeout(() => {
-        setUserMoneyNotifications((prev) => {
-          const newNotifications = { ...prev };
-          delete newNotifications[orderId];
-          return newNotifications;
+      if (matchingOrder) {
+        console.log("✅ Found matching order for notification:", matchingOrder.fullId);
+        
+        setUserMoneyNotifications((prev) => ({
+          ...prev,
+          [orderId]: {
+            message: "User received money in their account",
+            timestamp: new Date(timestamp),
+            amount: amount,
+          },
+        }));
+
+        // Auto-dismiss after 30 seconds
+        setTimeout(() => {
+          setUserMoneyNotifications((prev) => {
+            const newNotifications = { ...prev };
+            delete newNotifications[orderId];
+            return newNotifications;
+          });
+        }, 30000);
+      } else {
+        console.warn("⚠️ No matching order found for notification:", {
+          eventOrderId: orderId,
+          availableOrders: orders.map(o => ({ id: o.id, fullId: o.fullId }))
         });
-      }, 30000);
+      }
     };
 
-    window.addEventListener(
-      "userReceivedMoney",
-      handleUserReceivedMoney as EventListener
-    );
+    // 🔥 ENHANCED: Add the event listener immediately and also listen on document
+    console.log("🎧 Setting up user money received event listener in admin center");
+    
+    window.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+    document.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
 
     return () => {
-      window.removeEventListener(
-        "userReceivedMoney",
-        handleUserReceivedMoney as EventListener
-      );
+      window.removeEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
+      document.removeEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
     };
-  }, []);
+  }, [orders]); // 🔥 ADD: Depend on orders so it re-registers when orders change
 
   const fetchAcceptedOrders = async () => {
     if (!address) {
@@ -408,21 +469,21 @@ export default function AdminCenter() {
       }
     }
 
-    // Try to parse the id field
+
     const parsedId = parseInt(order.id);
     if (!isNaN(parsedId) && parsedId > 0) {
       console.log("✅ Using parsed order.id:", parsedId);
       return parsedId;
     }
 
-    // Last resort: create a hash-based ID
+  
     let hash = 0;
     for (let i = 0; i < order.fullId.length; i++) {
       const char = order.fullId.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash; 
     }
-    const hashId = (Math.abs(hash) % 1000000) + 1; // Ensure positive and reasonable size
+    const hashId = (Math.abs(hash) % 1000000) + 1;
 
     console.warn(
       "⚠️ Using fallback hash ID:",
@@ -460,8 +521,7 @@ export default function AdminCenter() {
 
       const GAS_STATION_ADDRESS = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
 
-      // Approve a large amount (1M USDT) for multiple future transactions
-      const approveAmount = "1000000"; // 1M USDT
+      const approveAmount = "1000000"; 
 
       console.log(
         "🔓 Approving large amount for multiple future transactions:",
@@ -901,9 +961,6 @@ export default function AdminCenter() {
     if (hasUserIcon(tag, orderIndex)) {
       switch (status) {
         case "waiting":
-          return "bg-[#622DBF] text-white";
-        case "completed":
-          return "bg-green-600 text-white";
         default:
           return "bg-gray-600 text-white";
       }
@@ -1026,6 +1083,24 @@ export default function AdminCenter() {
     });
   };
 
+  const handleDismissUserConfirmation = async (orderId: string) => {
+    try {
+      console.log('🔕 Admin dismissing user confirmation notification for:', orderId);
+
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          (order.fullId === orderId || order.id === orderId)
+            ? { ...order, userConfirmedReceived: false }
+            : order
+        )
+      );
+    
+      
+    } catch (error) {
+      console.error('❌ Error dismissing user confirmation:', error);
+    }
+  };
+
   console.log("Admin Center State:", {
     loading,
     ordersCount: orders.length,
@@ -1073,6 +1148,29 @@ export default function AdminCenter() {
           <div>Please connect your admin wallet to view orders</div>
         </div>
       )}
+
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-4 p-2 bg-blue-600/20 border border-blue-600/50 rounded">
+          <button
+            onClick={() => {
+              const testOrder = orders[0];
+              if (testOrder) {
+                window.dispatchEvent(new CustomEvent('userReceivedMoney', {
+                  detail: {
+                    orderId: testOrder.fullId || testOrder.id,
+                    orderType: testOrder.orderType,
+                    amount: "1000.00",
+                    timestamp: new Date().toISOString()
+                  }
+                }));
+              }
+            }}
+            className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+          >
+            🧪 Test Notification (Dev Only)
+          </button>
+        </div>
+      )}  
 
       <div className="space-y-4">
         {loading ? (
@@ -1160,32 +1258,61 @@ export default function AdminCenter() {
                   </div>
                 )}
 
-                {hasUserMoneyNotification &&
-                  order.orderType.includes("SELL") && (
-                    <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg animate-pulse">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce"></div>
-                          <span className="text-green-400 font-medium text-sm">
-                            💰 {hasUserMoneyNotification.message}
-                          </span>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            dismissNotification(order.fullId || order.id);
-                          }}
-                          className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
-                        >
-                          ✕
-                        </button>
+                {order.orderType.includes("SELL") && order.userConfirmedReceived && (
+                  <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <span className="text-green-400 font-medium text-sm">
+                          💰 User confirmed: Money received in their account
+                        </span>
                       </div>
-                      <div className="text-xs text-green-300 mt-1">
-                        Amount: ₹{hasUserMoneyNotification.amount} • Time:{" "}
-                        {hasUserMoneyNotification.timestamp.toLocaleTimeString()}
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDismissUserConfirmation(order.fullId || order.id);
+                        }}
+                        className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )}
+                    <div className="text-xs text-green-300 mt-1">
+                      Amount: ₹{order.amount} • 
+                      Confirmed: {order.userConfirmedAt ? new Date(order.userConfirmedAt).toLocaleString() : 'Just now'}
+                    </div>
+                    <div className="text-xs text-green-200 mt-1 italic">
+                      Database confirmation • Order: {order.orderType}
+                    </div>
+                  </div>
+                )}
+
+                {order.orderType.includes("SELL") && 
+                  (userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id]) && (
+                  <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <span className="text-green-400 font-medium text-sm">
+                          💰 User received money in their account
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissNotification(order.fullId || order.id);
+                        }}
+                        className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="text-xs text-green-300 mt-1">
+                      Amount: ₹{(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.amount} • 
+                      Time: {(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.timestamp.toLocaleTimeString()}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -1308,7 +1435,6 @@ export default function AdminCenter() {
                   </span>
                 </div>
 
-                {/* Add approval status indicator for buy orders */}
                 {order.orderType.includes("BUY") && (
                   <div className="mb-2 text-xs">
                     {adminApprovalState[index] === "approving" && (

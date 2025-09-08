@@ -6,7 +6,7 @@ export async function PATCH(
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = await params // 🔥 FIX: await the params
+    const { orderId } = await params
     const body = await request.json()
     
     console.log('📝 Admin order update request:', {
@@ -75,7 +75,7 @@ export async function GET(
   { params }: { params: Promise<{ orderId: string }> }
 ) {
   try {
-    const { orderId } = await params // 🔥 FIX: await the params
+    const { orderId } = await params 
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
