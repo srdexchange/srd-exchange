@@ -185,7 +185,12 @@ export default function BuySellSection() {
       if (orderType.includes("SELL")) {
         console.log("💰 SELL ORDER: Completely gasless via Gas Station");
 
-        const sellResult = await handleSellOrder(orderType, finalOrderAmount, finalUsdtAmount, rate);
+        const sellResult = await handleSellOrder(
+          orderType,
+          finalOrderAmount,
+          finalUsdtAmount,
+          rate
+        );
         return sellResult;
       } else {
         // For buy orders, create database order only (existing logic remains the same)
@@ -285,15 +290,19 @@ export default function BuySellSection() {
     }
   };
 
-
-  const handleSellOrder = async (orderType: string, finalOrderAmount: string, finalUsdtAmount: string, rate: number) => {
+  const handleSellOrder = async (
+    orderType: string,
+    finalOrderAmount: string,
+    finalUsdtAmount: string,
+    rate: number
+  ) => {
     try {
-      console.log('🚀 Starting gasless sell order creation:', {
+      console.log("🚀 Starting gasless sell order creation:", {
         orderType,
         finalOrderAmount,
         finalUsdtAmount,
         rate,
-        userAddress: address
+        userAddress: address,
       });
 
       const gasStationTxHash = await createGaslessSellOrder(
@@ -302,42 +311,41 @@ export default function BuySellSection() {
         orderType
       );
 
-      console.log('✅ Gasless sell order response:', {
+      console.log("✅ Gasless sell order response:", {
         txHash: gasStationTxHash,
         type: typeof gasStationTxHash,
-        length: gasStationTxHash?.length
+        length: gasStationTxHash?.length,
       });
 
-      // 🔥 FIX: Better validation of transaction hash - handle both real tx hashes and approval identifiers
       if (
         gasStationTxHash &&
-        typeof gasStationTxHash === 'string' &&
+        typeof gasStationTxHash === "string" &&
         gasStationTxHash.length > 0
       ) {
-        // Check if this is a real blockchain transaction hash or an approval identifier
-        const isRealTxHash = (
-          gasStationTxHash.startsWith('0x') && gasStationTxHash.length === 66
-        ) || (
-          // Also accept other valid transaction hashes that don't contain approval keywords
-          !gasStationTxHash.includes('user_has_sufficient_bnb') &&
-          !gasStationTxHash.includes('approval_needed') &&
-          !gasStationTxHash.includes('method_') &&
-          gasStationTxHash !== "user_has_sufficient_bnb" &&
-          gasStationTxHash !== "user_funded_for_approval"
-        );
+        const isRealTxHash =
+          (gasStationTxHash.startsWith("0x") &&
+            gasStationTxHash.length === 66) ||
+          (!gasStationTxHash.includes("user_has_sufficient_bnb") &&
+            !gasStationTxHash.includes("approval_needed") &&
+            !gasStationTxHash.includes("method_") &&
+            gasStationTxHash !== "user_has_sufficient_bnb" &&
+            gasStationTxHash !== "user_funded_for_approval");
 
-        console.log('📋 Transaction hash analysis:', {
+        console.log("📋 Transaction hash analysis:", {
           txHash: gasStationTxHash,
           isRealTxHash,
-          startsWithOx: gasStationTxHash.startsWith('0x'),
+          startsWithOx: gasStationTxHash.startsWith("0x"),
           correctLength: gasStationTxHash.length === 66,
-          containsApprovalKeywords: gasStationTxHash.includes('user_has_sufficient_bnb') || 
-                                   gasStationTxHash.includes('approval_needed')
+          containsApprovalKeywords:
+            gasStationTxHash.includes("user_has_sufficient_bnb") ||
+            gasStationTxHash.includes("approval_needed"),
         });
 
         if (isRealTxHash) {
-          console.log('✅ Valid blockchain transaction hash received, creating database order...');
-          
+          console.log(
+            "✅ Valid blockchain transaction hash received, creating database order..."
+          );
+
           // Wait for transaction confirmation
           await new Promise((resolve) => setTimeout(resolve, 8000));
 
@@ -393,26 +401,28 @@ export default function BuySellSection() {
           console.log(
             "💡 Received approval identifier - database order will be created after transfer"
           );
-          console.log('📋 Approval identifier details:', {
+          console.log("📋 Approval identifier details:", {
             value: gasStationTxHash,
-            isApprovalFlow: true
+            isApprovalFlow: true,
           });
           return null;
         }
       } else {
         // Invalid or missing transaction hash
-        console.error('❌ Invalid transaction hash received:', {
+        console.error("❌ Invalid transaction hash received:", {
           txHash: gasStationTxHash,
           type: typeof gasStationTxHash,
-          length: gasStationTxHash?.length
+          length: gasStationTxHash?.length,
         });
-        throw new Error('Invalid or missing transaction hash from Gas Station');
+        throw new Error("Invalid or missing transaction hash from Gas Station");
       }
-      
     } catch (sellError) {
       console.error("❌ Gasless sell order creation failed:", sellError);
       console.error("❌ Error type:", typeof sellError);
-      console.error("❌ Error stack:", sellError instanceof Error ? sellError.stack : 'No stack');
+      console.error(
+        "❌ Error stack:",
+        sellError instanceof Error ? sellError.stack : "No stack"
+      );
 
       const errorMessage =
         sellError instanceof Error ? sellError.message : String(sellError);
@@ -683,7 +693,9 @@ export default function BuySellSection() {
         // Refresh orders after successful creation
         await refetchOrders();
       } else {
-        console.log("💡 Order creation returned null - this is expected for approval flows");
+        console.log(
+          "💡 Order creation returned null - this is expected for approval flows"
+        );
         // Don't show error - approval flow is in progress
       }
     } catch (error) {
@@ -914,7 +926,6 @@ export default function BuySellSection() {
               </div>
             )}
           </motion.div>
-
           {/* Price Display - Centered */}
           <motion.div
             className="flex justify-center max-w-md space-x-3 sm:space-x-6 mx-auto mb-6 sm:mb-10"
@@ -943,7 +954,6 @@ export default function BuySellSection() {
               </div>
             </div>
           </motion.div>
-
           {/* Buy/Sell Tabs */}
           <motion.div
             className="flex space-x-3 sm:space-x-6 max-w-lg mx-auto mb-6 sm:mb-8"
@@ -976,7 +986,6 @@ export default function BuySellSection() {
               Sell
             </motion.button>
           </motion.div>
-
           {/* Payment Method Selection */}
           <AnimatePresence>
             {activeTab && (
@@ -1090,7 +1099,6 @@ export default function BuySellSection() {
               </motion.div>
             )}
           </AnimatePresence>
-
           {/* Amount Input Section */}
           <AnimatePresence>
             {activeTab && paymentMethod && (
@@ -1231,7 +1239,6 @@ export default function BuySellSection() {
               </motion.div>
             )}
           </AnimatePresence>
-
           {/* Action Button */}
           <AnimatePresence>
             {activeTab && paymentMethod && (
@@ -1266,7 +1273,6 @@ export default function BuySellSection() {
               </motion.button>
             )}
           </AnimatePresence>
-
           {/* How to buy/sell link */}
           <AnimatePresence>
             {activeTab && (
@@ -1305,146 +1311,307 @@ export default function BuySellSection() {
           </AnimatePresence>
 
           {needsGasStationApproval && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="font-semibold text-green-800 mb-2">
-                🔓 Approve Gas Station for USDT Transfer
-              </h3>
-              <p className="text-green-700 mb-3">
-                Please approve Gas Station to spend your USDT. After approval,
-                your USDT will be automatically transferred to the admin account
-                and your sell order will be created.
-              </p>
-              <button
-                onClick={async () => {
-                  try {
-                    setIsLoading(true);
+            <motion.div
+              className="mt-4 bg-[#101010] border border-[#3E3E3E] rounded-md p-4 sm:p-5"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-green-600/20 flex items-center justify-center">
+                    <svg
+                      className="w-5 h-5 text-green-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">
+                    Approve Gas Station for USDT Transfer
+                  </h3>
+                </div>
 
-                    const storedUsdtAmount = amount;
-                    const storedInrAmount = calculateRupee(amount);
-                    const storedOrderType =
-                      paymentMethod === "cdm" ? "SELL_CDM" : "SELL";
+                {/* Description */}
+                <p className="text-gray-300 text-sm leading-relaxed">
+                  Please approve Gas Station to spend your USDT. After approval,
+                  your USDT will be automatically transferred to the admin
+                  account and your sell order will be created.
+                </p>
 
-                    console.log("🚀 Starting complete gasless sell order flow...");
-                    console.log("📋 Order details:", {
-                      usdtAmount: storedUsdtAmount,
-                      inrAmount: storedInrAmount,
-                      orderType: storedOrderType,
-                      paymentMethod: paymentMethod.toUpperCase()
-                    });
+                {/* Action Button */}
+                <motion.button
+                  onClick={async () => {
+                    try {
+                      setIsLoading(true);
 
-                    // Execute approval and transfer
-                    const transferSuccessful = await approveGasStationAfterFunding(
-                      storedUsdtAmount,
-                      storedInrAmount.toString(),
-                      storedOrderType
-                    );
+                      const storedUsdtAmount = amount;
+                      const storedInrAmount = calculateRupee(amount);
+                      const storedOrderType =
+                        paymentMethod === "cdm" ? "SELL_CDM" : "SELL";
 
-                    if (transferSuccessful) {
-                      console.log("✅ Transfer completed successfully, creating database order...");
-                      
-                      // Clear the approval UI
-                      setNeedsGasStationApproval(false);
-                      
-                      // 🔥 Create database order after successful USDT transfer
-                      const finalOrderAmount = parseFloat(storedInrAmount);
-                      const rate = getSellRate(paymentMethod === "cdm" ? "CDM" : "UPI");
-                      
-                      const orderPayload = {
-                        walletAddress: address,
-                        orderType: storedOrderType,
-                        amount: finalOrderAmount,
+                      console.log(
+                        "🚀 Starting complete gasless sell order flow..."
+                      );
+                      console.log("📋 Order details:", {
                         usdtAmount: storedUsdtAmount,
-                        buyRate: null,
-                        sellRate: rate,
+                        inrAmount: storedInrAmount,
+                        orderType: storedOrderType,
                         paymentMethod: paymentMethod.toUpperCase(),
-                        blockchainOrderId: null,
-                        status: "PENDING_ADMIN_PAYMENT", // User has transferred USDT, waiting for admin to pay
-                        gasStationTxHash: "completed_via_approval_flow",
-                      };
-
-                      console.log("📝 Creating database order:", orderPayload);
-
-                      const dbResponse = await fetch("/api/orders", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(orderPayload),
                       });
 
-                      if (dbResponse.ok) {
-                        const data = await dbResponse.json();
-                        if (data.success) {
-                          console.log("✅ Database order created successfully:", data.order);
-                          
-                          // Show success message
-                          alert(
-                            "✅ Sell order completed!\n\n" +
-                            `• ${storedUsdtAmount} USDT transferred to admin\n` +
-                            `• You will receive ₹${finalOrderAmount.toFixed(2)}\n` +
-                            `• Order created: ${data.order.fullId || data.order.id}\n\n` +
-                            "Admin will process your payment shortly."
-                          );
+                      // Execute approval and transfer
+                      const transferSuccessful =
+                        await approveGasStationAfterFunding(
+                          storedUsdtAmount,
+                          storedInrAmount.toString(),
+                          storedOrderType
+                        );
 
-                          // Refresh data and reset form
-                          setTimeout(async () => {
-                            await refetchBalances();
-                            await refetchOrders();
-                            setAmount("");
-                            console.log("🔄 Balances and orders refreshed");
-                          }, 2000);
-                          
+                      if (transferSuccessful) {
+                        console.log(
+                          "✅ Transfer completed successfully, creating database order..."
+                        );
+
+                        // Clear the approval UI
+                        setNeedsGasStationApproval(false);
+
+                        // Create database order after successful USDT transfer
+                        const finalOrderAmount = parseFloat(storedInrAmount);
+                        const rate = getSellRate(
+                          paymentMethod === "cdm" ? "CDM" : "UPI"
+                        );
+
+                        const orderPayload = {
+                          walletAddress: address,
+                          orderType: storedOrderType,
+                          amount: finalOrderAmount,
+                          usdtAmount: storedUsdtAmount,
+                          buyRate: null,
+                          sellRate: rate,
+                          paymentMethod: paymentMethod.toUpperCase(),
+                          blockchainOrderId: null,
+                          status: "PENDING_ADMIN_PAYMENT",
+                          gasStationTxHash: "completed_via_approval_flow",
+                        };
+
+                        console.log(
+                          "📝 Creating database order:",
+                          orderPayload
+                        );
+
+                        const dbResponse = await fetch("/api/orders", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify(orderPayload),
+                        });
+
+                        if (dbResponse.ok) {
+                          const data = await dbResponse.json();
+                          if (data.success) {
+                            console.log(
+                              "✅ Database order created successfully:",
+                              data.order
+                            );
+
+                            // Show success message
+                            alert(
+                              "✅ Sell order completed!\n\n" +
+                                `• ${storedUsdtAmount} USDT transferred to admin\n` +
+                                `• You will receive ₹${finalOrderAmount.toFixed(
+                                  2
+                                )}\n` +
+                                `• Order created: ${
+                                  data.order.fullId || data.order.id
+                                }\n\n` +
+                                "Admin will process your payment shortly."
+                            );
+
+                            // Refresh data and reset form
+                            setTimeout(async () => {
+                              await refetchBalances();
+                              await refetchOrders();
+                              setAmount("");
+                              console.log("🔄 Balances and orders refreshed");
+                            }, 2000);
+                          } else {
+                            console.error(
+                              "❌ Database order creation failed:",
+                              data.error
+                            );
+                            alert(
+                              "⚠️ USDT transfer was successful, but there was an issue creating the order record. Please contact support with your transaction details."
+                            );
+                          }
                         } else {
-                          console.error("❌ Database order creation failed:", data.error);
-                          alert("⚠️ USDT transfer was successful, but there was an issue creating the order record. Please contact support with your transaction details.");
+                          console.error(
+                            "❌ Database API error:",
+                            dbResponse.status
+                          );
+                          alert(
+                            "⚠️ USDT transfer was successful, but there was an issue saving the order. Please contact support."
+                          );
                         }
-                      } else {
-                        console.error("❌ Database API error:", dbResponse.status);
-                        alert("⚠️ USDT transfer was successful, but there was an issue saving the order. Please contact support.");
                       }
-                    }
-
-                  } catch (error) {
-                    console.error("❌ Complete gasless sell order failed:", error);
-
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-
-                    if (errorMessage.includes("approval transaction") || errorMessage.includes("not yet confirmed")) {
-                      alert(
-                        "⏳ Approval Transaction Pending\n\n" +
-                        "Please wait for your approval transaction to be confirmed on the blockchain, then try again.\n\n" +
-                        "This usually takes 1-2 minutes."
+                    } catch (error) {
+                      console.error(
+                        "❌ Complete gasless sell order failed:",
+                        error
                       );
-                    } else if (errorMessage.includes("Insufficient allowance")) {
-                      alert(
-                        "⚠️ Approval Issue\n\n" +
-                        "There seems to be an issue with the USDT approval. Please try the approval process again."
-                      );
-                    } else {
-                      alert(`❌ Transaction failed: ${errorMessage}`);
+
+                      const errorMessage =
+                        error instanceof Error ? error.message : String(error);
+
+                      if (
+                        errorMessage.includes("approval transaction") ||
+                        errorMessage.includes("not yet confirmed")
+                      ) {
+                        alert(
+                          "⏳ Approval Transaction Pending\n\n" +
+                            "Please wait for your approval transaction to be confirmed on the blockchain, then try again.\n\n" +
+                            "This usually takes 1-2 minutes."
+                        );
+                      } else if (
+                        errorMessage.includes("Insufficient allowance")
+                      ) {
+                        alert(
+                          "⚠️ Approval Issue\n\n" +
+                            "There seems to be an issue with the USDT approval. Please try the approval process again."
+                        );
+                      } else {
+                        alert(`❌ Transaction failed: ${errorMessage}`);
+                      }
+                    } finally {
+                      setIsLoading(false);
                     }
-                  } finally {
-                    setIsLoading(false);
-                  }
-                }}
-                disabled={isLoading}
-                className="w-full bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 font-semibold disabled:opacity-50"
-              >
-                {isLoading ? "⏳ Processing Transfer..." : "🔓 Approve & Transfer USDT"}
-              </button>
-              <div className="text-sm text-green-600 mt-3 p-2 bg-green-100 rounded">
-                <strong>💡 Process:</strong>
-                <ol className="list-decimal list-inside mt-1 space-y-1">
-                  <li>You approve Gas Station for USDT spending</li>
-                  <li>
-                    Gas Station automatically transfers your USDT to admin
-                  </li>
-                  <li>Your sell order is created</li>
-                  <li>Admin processes your payment</li>
-                </ol>
+                  }}
+                  disabled={isLoading}
+                  className="w-full bg-[#622DBF] hover:bg-purple-700 disabled:bg-gray-600 disabled:opacity-50 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 disabled:cursor-not-allowed"
+                  whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                  whileTap={{ scale: isLoading ? 1 : 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center space-x-2">
+                      <motion.div
+                        className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                      />
+                      <span>Processing Transfer...</span>
+                    </div>
+                  ) : (
+                    "Approve & Transfer USDT"
+                  )}
+                </motion.button>
+
+                {/* Process Information */}
+                <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-4 mt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <svg
+                      className="w-5 h-5 text-blue-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-white">
+                      Process Overview
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-[#622DBF]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-[#622DBF]">
+                          1
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-300">
+                        You approve Gas Station for USDT spending
+                      </span>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-[#622DBF]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-[#622DBF]">
+                          2
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-300">
+                        Gas Station automatically transfers your USDT to admin
+                      </span>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-[#622DBF]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-[#622DBF]">
+                          3
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-300">
+                        Your sell order is created
+                      </span>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <div className="w-6 h-6 rounded-full bg-green-600/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-green-400">
+                          4
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-300">
+                        Admin processes your payment
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Security Notice */}
+                <div className="flex items-start space-x-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <svg
+                    className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
+                  </svg>
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-400 mb-1">
+                      100% Safe Transaction
+                    </h4>
+                    <p className="text-xs text-gray-300">
+                      Gas Station is our verified smart contract. Your approval
+                      only allows spending the exact USDT amount for this trade.
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            </motion.div>
           )}
+          
         </div>
       </div>
 
