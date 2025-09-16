@@ -260,7 +260,7 @@ export default function FeatureBento() {
                 transition={{ duration: 0.5, delay: 0.4 }}
                 viewport={{ once: true }}
               >
-                Our CMD option ensures a 100% no-freeze 
+                Our CDM option ensures a 100% no-freeze 
                 guarantee, with support ready to assist if issues 
                 arise.
               </motion.p>
