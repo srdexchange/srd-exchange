@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserOrders } from "@/hooks/useUserOrders";
-import { useAccount } from 'wagmi';
+import { useAccount } from '@particle-network/connectkit';
 import BuyCDMModal from './modal/buy-cdm';
 import BuyUPIModal from './modal/buy-upi';
 import SellUPIModal from './modal/sell-upi';

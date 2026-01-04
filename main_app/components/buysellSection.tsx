@@ -7,14 +7,14 @@ import { useWalletManager } from "@/hooks/useWalletManager";
 import { useUserOrders } from "@/hooks/useUserOrders";
 import { useRates } from "@/hooks/useRates";
 import { useModalState } from "@/hooks/useModalState";
-import { useChainId } from "wagmi";
+import { useAccount } from "@particle-network/connectkit";
 import BuyCDMModal from "./modal/buy-cdm";
 import BuyUPIModal from "./modal/buy-upi";
 import SellUPIModal from "./modal/sell-upi";
 import SellCDMModal from "./modal/sell-cdm";
 import BankDetailsModal, { BankDetailsData } from "./modal/bank-details-modal";
 import { useBankDetails } from "@/hooks/useBankDetails";
-import { readContract } from "@wagmi/core";
+import { usePublicClient } from "@particle-network/connectkit";
 import { config } from "@/lib/wagmi";
 import { parseUnits, formatUnits } from "viem";
 
@@ -45,7 +45,7 @@ export default function BuySellSection() {
   const CDM_MIN_USDT = 100;
   const CDM_MAX_USDT = 500;
 
-  const chainId = useChainId();
+  const { chainId } = useAccount();
   const [activeTab, setActiveTab] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amount, setAmount] = useState("");
@@ -1670,7 +1670,8 @@ async function verifyGasStationApproval(
     });
 
     // Check current allowance
-    const currentAllowance = await readContract(config as any, {
+    if (!publicClient || !('readContract' in publicClient)) throw new Error("Public client not available");
+    const currentAllowance = await (publicClient as any).readContract({
       address: CONTRACTS.USDT[56],
       abi: USDT_ABI,
       functionName: "allowance",

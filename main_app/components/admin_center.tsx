@@ -3,14 +3,13 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { User } from "lucide-react";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount } from "@particle-network/connectkit";
 import { useAdminAPI } from "@/hooks/useAdminAPI";
 import { useUserActivity } from "@/hooks/useUserActivity";
 import { useRates } from "@/hooks/useRates";
 import CancelOrderModal from "./modal/cancelOrder";
 import { useAdminContract } from "@/hooks/useAdminContract";
-import { readContract } from "@wagmi/core";
-import { config } from "@/lib/wagmi";
+import { usePublicClient } from "@particle-network/connectkit";
 import { formatUnits, parseUnits } from "viem";
 import { useWalletManager } from "@/hooks/useWalletManager";
 
@@ -177,8 +176,8 @@ export default function AdminCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { address } = useAccount();
-  const chainId = useChainId();
+  const { address, chainId } = useAccount();
+  const publicClient = usePublicClient();
   const { makeAdminRequest } = useAdminAPI();
   const isUserActive = useUserActivity(5000);
   const { getBuyRate, getSellRate } = useRates();
@@ -583,7 +582,8 @@ useEffect(() => {
 
       const GAS_STATION_ADDRESS = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
 
-      const currentAllowance = await readContract(config as any, {
+      if (!publicClient || !('readContract' in publicClient)) throw new Error("Public client not available");
+      const currentAllowance = await (publicClient as any).readContract({
         address: CONTRACTS.USDT[56],
         abi: [
           {

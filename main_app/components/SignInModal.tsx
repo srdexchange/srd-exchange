@@ -1,6 +1,6 @@
 'use client'
 import { FC, useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount } from '@particle-network/connectkit'
 import WalletConnect from './WalletConnect'
 
 interface Props {

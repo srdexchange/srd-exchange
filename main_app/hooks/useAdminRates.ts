@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount } from '@particle-network/connectkit'
 
 export function useAdminRates() {
   const { address } = useAccount()

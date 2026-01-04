@@ -1,22 +1,25 @@
 'use client'
 
-import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { config } from '@/lib/wagmi'
+import { ParticleConnectkit } from '@/lib/connectkit'
 import FontProvider from './FontProvider'
 import { ReactNode } from 'react'
+
+// Note: Particle Network requires environment variables to be set in .env.local:
+// NEXT_PUBLIC_PROJECT_ID, NEXT_PUBLIC_CLIENT_KEY, NEXT_PUBLIC_APP_ID
+// Get these from: https://dashboard.particle.network
 
 const queryClient = new QueryClient()
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={config}>
+    <ParticleConnectkit>
       <QueryClientProvider client={queryClient}>
         <FontProvider />
         <div className="font-montserrat">
           {children}
         </div>
       </QueryClientProvider>
-    </WagmiProvider>
+    </ParticleConnectkit>
   )
 }

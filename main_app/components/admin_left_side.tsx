@@ -3,7 +3,7 @@
 import { Search, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useAccount } from 'wagmi';
+import { useAccount } from '@particle-network/connectkit';
 import { useAdminAPI } from '@/hooks/useAdminAPI';
 import { useUserActivity } from '@/hooks/useUserActivity';
 import { useRates } from '@/hooks/useRates';

@@ -1,6 +1,6 @@
 'use client'
 
-import { useAccount } from 'wagmi'
+import { useAccount } from '@particle-network/connectkit'
 import { useState, useCallback } from 'react'
 
 export function useAdminAPI() {

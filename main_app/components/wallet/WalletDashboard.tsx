@@ -46,7 +46,7 @@ export default function WalletConnectModal({
   onClose, 
   onSuccess 
 }: WalletConnectModalProps) {
-  const { connectors, connect, status, error } = useConnect()
+  const { setOpen } = useModal()
   const { isConnected, address } = useAccount()
   const { disconnect } = useDisconnect()
   const { walletData, fetchWalletData, isOnBSC, switchToBSC } = useWalletManager()
@@ -133,37 +133,14 @@ export default function WalletConnectModal({
     }
   }
 
-  const handleConnect = async (walletOption: any) => {
-    if (walletOption.disabled || !acceptedTerms) return
-    
-    setSelectedConnector(walletOption.id)
-    
-    try {
-      let connector
-      
-      switch (walletOption.id) {
-        case 'metaMask':
-          connector = connectors.find(c => c.name.toLowerCase().includes('metamask'))
-          break
-        case 'binanceWallet':
-          connector = connectors.find(c => c.name.toLowerCase().includes('binance'))
-          break
-        case 'walletConnect':
-          connector = connectors.find(c => c.id === 'walletConnect')
-          break
-        default:
-          connector = connectors[0]
-      }
-      
-      if (connector) {
-        await connect({ connector })
-      } else {
-        throw new Error('Wallet not available')
-      }
-    } catch (error) {
-      console.error('Connection failed:', error)
-      setSelectedConnector(null)
+  const handleConnect = async () => {
+    if (!acceptedTerms) {
+      alert("Please accept the Terms and Conditions to continue.");
+      return;
     }
+    
+    // Open Particle Network's connect modal
+    setOpen(true);
   }
 
   // Loading states

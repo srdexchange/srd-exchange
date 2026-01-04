@@ -1,17 +1,14 @@
 import { useState, useEffect } from "react";
 import {
   useAccount,
-  useReadContract,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useBalance,
-  useChainId,
   useSwitchChain,
-} from "wagmi";
+  usePublicClient,
+  useWallets,
+} from "@particle-network/connectkit";
 import { parseUnits, formatUnits, Address } from "viem";
-import { bsc } from "wagmi/chains"; // Only import BSC mainnet
-import { config } from "@/lib/wagmi";
-import { readContract, simulateContract } from "@wagmi/core";
+import type { Chain as ViemChain } from "viem";
+import { bsc } from "@particle-network/connectkit/chains";
+import { PublicClient } from "viem";
 
 // Add Gas Station import
 const GAS_STATION_ENABLED =
@@ -237,38 +234,61 @@ const createSerializableWalletData = (walletInfo: any) => {
 };
 
 export function useWalletManager() {
-  const { address, isConnected, isConnecting } = useAccount();
-  const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
+  const { address, isConnected, chainId, chain, status } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const publicClient = usePublicClient() as PublicClient;
+  const [primaryWallet] = useWallets();
+  const isConnecting = status === "connecting" || status === "reconnecting";
   const [walletData, setWalletData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [bnbBalance, setBnbBalance] = useState<bigint | null>(null);
+  const [usdtBalance, setUsdtBalance] = useState<bigint | null>(null);
+  const [usdtDecimals, setUsdtDecimals] = useState<number | null>(null);
+  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
+  const [isPending, setIsPending] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  // Support BSC mainnet only
-  const { data: bnbBalance, refetch: refetchBnb } = useBalance({
-    address,
-    chainId: chainId,
-  });
+  // Fetch BNB balance
+  const refetchBnb = async () => {
+    if (!address || !publicClient || !('getBalance' in publicClient)) return;
+    try {
+      const balance = await (publicClient as any).getBalance({ address: address as Address });
+      setBnbBalance(balance);
+    } catch (error) {
+      console.error("Failed to fetch BNB balance:", error);
+    }
+  };
 
-  // Get USDT balance - BSC Mainnet only
-  const { data: usdtBalance, refetch: refetchUsdt } = useReadContract({
-    address: CONTRACTS.USDT[56], // Force mainnet
-    abi: USDT_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address && chainId === bsc.id, // Only enable for mainnet
-    },
-  });
+  // Fetch USDT balance and decimals
+  const refetchUsdt = async () => {
+    if (!address || !publicClient || chainId !== bsc.id || !('readContract' in publicClient)) return;
+    try {
+      const balance = await (publicClient as any).readContract({
+        address: CONTRACTS.USDT[56],
+        abi: USDT_ABI,
+        functionName: "balanceOf",
+        args: [address],
+      });
+      setUsdtBalance(balance as bigint);
 
-  // Get USDT decimals for mainnet
-  const { data: usdtDecimals } = useReadContract({
-    address: CONTRACTS.USDT[56], // Force mainnet
-    abi: USDT_ABI,
-    functionName: "decimals",
-    query: {
-      enabled: !!address && chainId === bsc.id, // Only enable for mainnet
-    },
-  });
+      const decimals = await (publicClient as any).readContract({
+        address: CONTRACTS.USDT[56],
+        abi: USDT_ABI,
+        functionName: "decimals",
+      });
+      setUsdtDecimals(Number(decimals));
+    } catch (error) {
+      console.error("Failed to fetch USDT balance:", error);
+    }
+  };
+
+  // Fetch balances when address or chainId changes
+  useEffect(() => {
+    if (address && chainId === bsc.id && publicClient) {
+      refetchBnb();
+      refetchUsdt();
+    }
+  }, [address, chainId, publicClient]);
 
   // Add debugging for USDT balance
   useEffect(() => {
@@ -276,7 +296,7 @@ export function useWalletManager() {
       console.log("🔍 USDT Balance Debug:", {
         address,
         chainId,
-        contractAddress: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+        contractAddress: CONTRACTS.USDT[56],
         rawBalance: usdtBalance.toString(),
         decimals: usdtDecimals ? Number(usdtDecimals) : "unknown",
         formattedWithActualDecimals: usdtDecimals
@@ -289,18 +309,67 @@ export function useWalletManager() {
     }
   }, [usdtBalance, usdtDecimals, address, chainId]);
 
-  // Transaction management
-  const { writeContract, data: hash, isPending } = useWriteContract();
-  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash });
-
   // Force BSC mainnet only
   const isOnBSC = chainId === bsc.id;
+
+  // Helper function to read contracts
+  const readContractHelper = async (params: {
+    address: Address;
+    abi: any;
+    functionName: string;
+    args?: any[];
+  }) => {
+    if (!publicClient) {
+      throw new Error("Public client not available");
+    }
+    // Type assertion for EVM chains - Particle Network's usePublicClient returns viem PublicClient for EVM
+    const evmClient = publicClient as any;
+    if (!evmClient.readContract) {
+      throw new Error("Public client does not support readContract (might be Solana Connection)");
+    }
+    return await evmClient.readContract(params);
+  };
+
+  // Helper function to write contracts
+  const writeContractHelper = async (params: {
+    address: Address;
+    abi: any;
+    functionName: string;
+    args: any[];
+  }) => {
+    if (!primaryWallet || !address) throw new Error("Wallet not connected");
+    if (!publicClient) throw new Error("Public client not available");
+    
+    setIsPending(true);
+    try {
+      const walletClient = primaryWallet.getWalletClient();
+      const hash = await walletClient.writeContract({
+        ...params,
+        account: address as Address,
+        chain: chain || bsc,
+      });
+      setTxHash(hash);
+      setIsConfirming(true);
+      
+      // Wait for transaction receipt
+      if (publicClient && 'waitForTransactionReceipt' in publicClient) {
+        await (publicClient as any).waitForTransactionReceipt({ hash });
+      }
+      setIsConfirming(false);
+      setIsPending(false);
+      return hash;
+    } catch (error) {
+      setIsPending(false);
+      setIsConfirming(false);
+      throw error;
+    }
+  };
 
   const switchToBSC = async (): Promise<boolean> => {
     try {
       if (chainId !== bsc.id) {
         console.log("🔄 Switching to BSC Mainnet...");
-        await switchChain({ chainId: bsc.id });
+        await switchChainAsync({ chainId: bsc.id });
         return true;
       }
       return true;
@@ -319,7 +388,7 @@ export function useWalletManager() {
     try {
       if (chainId !== bsc.id) {
         console.log("🔄 Must switch to BSC Mainnet...");
-        await switchChain({ chainId: bsc.id });
+        await switchChainAsync({ chainId: bsc.id });
         setIsLoading(false);
         return null;
       }
@@ -350,8 +419,8 @@ export function useWalletManager() {
         isOnBSC: true,
         balances: {
           bnb: {
-            raw: bnbBalance?.value || BigInt(0),
-            formatted: bnbBalance ? formatUnits(bnbBalance.value, 18) : "0",
+            raw: bnbBalance || BigInt(0),
+            formatted: bnbBalance ? formatUnits(bnbBalance, 18) : "0",
             symbol: "BNB",
           },
           usdt: {
@@ -360,7 +429,7 @@ export function useWalletManager() {
             symbol: "USDT",
           },
         },
-        canTrade: (bnbBalance?.value || BigInt(0)) > parseUnits("0.001", 18),
+        canTrade: (bnbBalance || BigInt(0)) > parseUnits("0.001", 18),
         lastUpdated: new Date().toISOString(),
       };
 
@@ -388,20 +457,38 @@ export function useWalletManager() {
     inrAmount: string,
     orderType: string
   ) => {
-    if (!address) throw new Error("Wallet not connected");
+    if (!address || !primaryWallet) throw new Error("Wallet not connected");
     if (!isOnBSC) throw new Error("Please switch to a supported BSC network");
 
     const actualDecimals = usdtDecimals ? Number(usdtDecimals) : 6;
     const usdtAmountWei = parseUnits(usdtAmount, actualDecimals);
     const inrAmountWei = parseUnits(inrAmount, 2);
 
-    writeContract({
-      address:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
-      abi: P2P_TRADING_ABI,
-      functionName: "createBuyOrder",
-      args: [usdtAmountWei, inrAmountWei, orderType],
-    });
+    setIsPending(true);
+    try {
+      const walletClient = primaryWallet.getWalletClient();
+      const hash = await walletClient.writeContract({
+        address: CONTRACTS.P2P_TRADING[56],
+        abi: P2P_TRADING_ABI,
+        functionName: "createBuyOrder",
+        args: [usdtAmountWei, inrAmountWei, orderType],
+        account: address as Address,
+        chain: chain || bsc,
+      });
+      setTxHash(hash);
+      setIsConfirming(true);
+      
+      // Wait for transaction receipt
+      if (publicClient && 'waitForTransactionReceipt' in publicClient) {
+        await (publicClient as any).waitForTransactionReceipt({ hash });
+        setIsConfirming(false);
+        setIsPending(false);
+      }
+    } catch (error) {
+      setIsPending(false);
+      setIsConfirming(false);
+      throw error;
+    }
   };
 
   const createDirectSellOrderOnChain = async (
@@ -417,8 +504,8 @@ export function useWalletManager() {
       inrAmount,
       orderType,
       contractAddress:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
-      usdtContract: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+        CONTRACTS.P2P_TRADING[56],
+      usdtContract: CONTRACTS.USDT[56],
     });
 
     if (!usdtAmount || !inrAmount) {
@@ -439,9 +526,8 @@ export function useWalletManager() {
       });
 
       // Get admin wallet address from contract
-      const adminWallet = await readContract(config as any, {
-        address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+      const adminWallet = await readContractHelper({
+        address: CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "getAdminWallet",
       });
@@ -449,8 +535,8 @@ export function useWalletManager() {
       console.log("🔍 Admin wallet address:", adminWallet);
 
       // Check user's USDT balance
-      const userBalance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const userBalance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "balanceOf",
         args: [address],
@@ -471,15 +557,13 @@ export function useWalletManager() {
       }
 
       // Check allowance for admin wallet (not contract)
-      const currentAllowance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const currentAllowance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "allowance",
         args: [
           address,
-          CONTRACTS.P2P_TRADING[
-            chainId as keyof typeof CONTRACTS.P2P_TRADING
-          ],
+          CONTRACTS.P2P_TRADING[56],
         ],
       });
 
@@ -497,8 +581,8 @@ export function useWalletManager() {
           formatUnits(approveAmount, actualDecimals)
         );
 
-        writeContract({
-          address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+        await writeContractHelper({
+          address: CONTRACTS.USDT[56],
           abi: USDT_ABI,
           functionName: "approve",
           args: [
@@ -520,9 +604,8 @@ export function useWalletManager() {
 
       // Execute direct sell transfer
       console.log("📝 Executing direct sell transfer to admin...");
-      writeContract({
-        address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+      await writeContractHelper({
+        address: CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "directSellTransfer",
         args: [usdtAmountWei, inrAmountWei, orderType, adminWallet],
@@ -542,9 +625,8 @@ export function useWalletManager() {
     if (!address) throw new Error("Wallet not connected");
     if (!isOnBSC) throw new Error("Please switch to a supported BSC network");
 
-    writeContract({
-      address:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+    await writeContractHelper({
+      address: CONTRACTS.P2P_TRADING[56],
       abi: P2P_TRADING_ABI,
       functionName: "verifyPayment",
       args: [BigInt(orderId)],
@@ -565,9 +647,9 @@ export function useWalletManager() {
 
     try {
       // First, get the order details to know how much USDT we need
-      const orderDetails = await readContract(config as any, {
+      const orderDetails = await readContractHelper({
         address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "getOrder",
         args: [BigInt(orderId)],
@@ -581,8 +663,8 @@ export function useWalletManager() {
       );
 
       // Check admin's USDT balance
-      const adminBalance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const adminBalance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "balanceOf",
         args: [address],
@@ -603,13 +685,13 @@ export function useWalletManager() {
       }
 
       // Check current allowance
-      const currentAllowance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const currentAllowance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "allowance",
         args: [
           address,
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         ],
       });
 
@@ -625,8 +707,8 @@ export function useWalletManager() {
         // Approve double the amount for future transactions
         const approveAmount = usdtAmountNeeded * BigInt(2);
 
-        writeContract({
-          address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+        await writeContractHelper({
+          address: CONTRACTS.USDT[56],
           abi: USDT_ABI,
           functionName: "approve",
           args: [
@@ -645,9 +727,9 @@ export function useWalletManager() {
       // Now complete the buy order
       console.log("📝 Completing buy order on contract...");
 
-      writeContract({
+      await writeContractHelper({
         address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "completeBuyOrder",
         args: [BigInt(orderId)],
@@ -671,9 +753,9 @@ export function useWalletManager() {
     if (!address) throw new Error("Wallet not connected");
     if (!isOnBSC) throw new Error("Please switch to a supported BSC network");
 
-    writeContract({
+    await writeContractHelper({
       address:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+        CONTRACTS.P2P_TRADING[56],
       abi: P2P_TRADING_ABI,
       functionName: "completeSellOrder",
       args: [BigInt(orderId)],
@@ -684,9 +766,9 @@ export function useWalletManager() {
     if (!address) throw new Error("Wallet not connected");
     if (!isOnBSC) throw new Error("Please switch to a supported BSC network");
 
-    writeContract({
+    await writeContractHelper({
       address:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+        CONTRACTS.P2P_TRADING[56],
       abi: P2P_TRADING_ABI,
       functionName: "confirmOrderReceived",
       args: [BigInt(orderId)],
@@ -707,9 +789,9 @@ export function useWalletManager() {
     }
 
     try {
-      writeContract({
+      await writeContractHelper({
         address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "approveOrder",
         args: [BigInt(orderId)],
@@ -777,7 +859,7 @@ export function useWalletManager() {
         const usdtContract = CONTRACTS.USDT[56];
 
         // Pre-flight checks
-        const adminBalance = await readContract(config as any, {
+        const adminBalance = await readContractHelper({
           address: usdtContract,
           abi: USDT_ABI,
           functionName: "balanceOf",
@@ -794,7 +876,7 @@ export function useWalletManager() {
         }
 
         // Execute direct transfer
-        writeContract({
+        await writeContractHelper({
           address: usdtContract,
           abi: USDT_ABI,
           functionName: "transfer",
@@ -862,7 +944,7 @@ export function useWalletManager() {
         const actualDecimals = usdtDecimals ? Number(usdtDecimals) : 6;
         const usdtAmountWei = parseUnits(usdtAmount, actualDecimals);
         const contractAddress =
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING];
+          CONTRACTS.P2P_TRADING[56];
 
         if (
           !contractAddress ||
@@ -873,7 +955,7 @@ export function useWalletManager() {
           );
         }
 
-        writeContract({
+        await writeContractHelper({
           address: contractAddress,
           abi: P2P_TRADING_ABI,
           functionName: "directSellTransfer",
@@ -935,9 +1017,9 @@ export function useWalletManager() {
         const actualDecimals = usdtDecimals ? Number(usdtDecimals) : 6;
         const usdtAmountWei = parseUnits(usdtAmount, actualDecimals);
         const contractAddress =
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING];
+          CONTRACTS.P2P_TRADING[56];
 
-        writeContract({
+        await writeContractHelper({
           address: contractAddress,
           abi: P2P_TRADING_ABI,
           functionName: "createBuyOrder",
@@ -994,7 +1076,7 @@ export function useWalletManager() {
       orderType,
       userAddress: address,
       contractAddress:
-        CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+        CONTRACTS.P2P_TRADING[56],
     });
 
     if (!usdtAmount || !inrAmount) {
@@ -1015,7 +1097,7 @@ export function useWalletManager() {
 
       let adminWallet: string;
       try {
-        adminWallet = (await readContract(config as any, {
+        adminWallet = (await readContractHelper({
           address:
             CONTRACTS.P2P_TRADING[
               chainId as keyof typeof CONTRACTS.P2P_TRADING
@@ -1030,7 +1112,7 @@ export function useWalletManager() {
           error
         );
         try {
-          adminWallet = (await readContract(config as any, {
+          adminWallet = (await readContractHelper({
             address:
               CONTRACTS.P2P_TRADING[
                 chainId as keyof typeof CONTRACTS.P2P_TRADING
@@ -1055,8 +1137,8 @@ export function useWalletManager() {
       }
 
       // Check user's USDT balance
-      const userBalance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const userBalance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "balanceOf",
         args: [address],
@@ -1077,13 +1159,13 @@ export function useWalletManager() {
       }
 
       // Check allowance for P2P contract
-      const currentAllowance = await readContract(config as any, {
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      const currentAllowance = await readContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "allowance",
         args: [
           address,
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         ],
       });
 
@@ -1101,8 +1183,8 @@ export function useWalletManager() {
           formatUnits(approveAmount, actualDecimals)
         );
 
-        writeContract({
-          address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+        await writeContractHelper({
+          address: CONTRACTS.USDT[56],
           abi: USDT_ABI,
           functionName: "approve",
           args: [
@@ -1119,9 +1201,9 @@ export function useWalletManager() {
 
       // Execute direct sell transfer to admin
       console.log("📝 Executing direct sell transfer to admin...");
-      writeContract({
+      await writeContractHelper({
         address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "directSellTransfer",
         args: [
@@ -1171,9 +1253,9 @@ export function useWalletManager() {
 
       // Execute admin-paid transfer
       console.log("📝 Executing admin-paid sell transfer...");
-      writeContract({
+      await writeContractHelper({
         address:
-          CONTRACTS.P2P_TRADING[chainId as keyof typeof CONTRACTS.P2P_TRADING],
+          CONTRACTS.P2P_TRADING[56],
         abi: P2P_TRADING_ABI,
         functionName: "adminExecuteSellTransfer",
         args: [
@@ -1208,8 +1290,8 @@ export function useWalletManager() {
       const actualDecimals = usdtDecimals ? Number(usdtDecimals) : 6;
       const amountWei = parseUnits(amount, actualDecimals);
 
-      writeContract({
-        address: CONTRACTS.USDT[chainId as keyof typeof CONTRACTS.USDT],
+      await writeContractHelper({
+        address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "approve",
         args: [spender, amountWei],
@@ -1239,7 +1321,7 @@ export function useWalletManager() {
       const usdtAmountWei = parseUnits(usdtAmount, actualDecimals);
 
       // Check current allowance for Gas Station
-      const currentAllowance = await readContract(config as any, {
+      const currentAllowance = await readContractHelper({
         address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "allowance",
@@ -1273,7 +1355,7 @@ export function useWalletManager() {
       await new Promise((resolve) => setTimeout(resolve, 8000));
 
       // Verify approval
-      const newAllowance = await readContract(config as any, {
+      const newAllowance = await readContractHelper({
         address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "allowance",
@@ -1324,7 +1406,7 @@ export function useWalletManager() {
       // Get admin wallet
       let adminWallet = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E"; 
       try {
-        adminWallet = await readContract(config as any, {
+        adminWallet = await readContractHelper({
           address: CONTRACTS.P2P_TRADING[56],
           abi: [{
             inputs: [],
@@ -1599,7 +1681,7 @@ export function useWalletManager() {
       console.log("🔓 Step 1: User approving Gas Station for USDT spending...");
       
       // User initiates approval transaction
-      writeContract({
+      await writeContractHelper({
         address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: "approve",
@@ -1617,7 +1699,7 @@ export function useWalletManager() {
       // Get admin wallet
       let adminWallet = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
       try {
-        adminWallet = await readContract(config as any, {
+        adminWallet = await readContractHelper({
           address: CONTRACTS.P2P_TRADING[56],
           abi: [{
             inputs: [],
@@ -1692,7 +1774,7 @@ export function useWalletManager() {
       // Get admin wallet
       let adminWallet = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
       try {
-        adminWallet = await readContract(config as any, {
+        adminWallet = await readContractHelper({
           address: CONTRACTS.P2P_TRADING[56],
           abi: [{
             inputs: [],
@@ -1746,7 +1828,7 @@ export function useWalletManager() {
       const gasStationAddress = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E" as Address;
       
       // Check current allowance
-      const currentAllowance = await readContract(config as any, {
+      const currentAllowance = await readContractHelper({
         address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: 'allowance',
@@ -1785,7 +1867,7 @@ export function useWalletManager() {
       // First, get the actual decimals from the contract
       let actualDecimals = 18; // Default to 18 for BSC USDT
       try {
-        const decimalsResult = await readContract(config as any, {
+        const decimalsResult = await readContractHelper({
           address: CONTRACTS.USDT[56],
           abi: [
             {
@@ -1806,7 +1888,7 @@ export function useWalletManager() {
       }
 
       // Read current USDT balance
-      const balance = await readContract(config as any, {
+      const balance = await readContractHelper({
         address: CONTRACTS.USDT[56],
         abi: USDT_ABI,
         functionName: 'balanceOf',
@@ -1852,7 +1934,7 @@ export function useWalletManager() {
     isLoading: isLoading || isPending || isConfirming,
     fetchWalletData,
     refetchBalances,
-    switchChain,
+    switchChain: switchChainAsync,
     isOnBSC,
     switchToBSC,
     canTrade: walletData?.canTrade || false,
@@ -1880,7 +1962,7 @@ export function useWalletManager() {
     verifyUSDTBalance, // 🔥 NEW: Add balance verification function
     gasStationEnabled: GAS_STATION_ENABLED,
 
-    hash,
+    hash: txHash,
     isPending,
     isConfirming,
   };

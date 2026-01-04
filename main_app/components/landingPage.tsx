@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useModal } from "@/contexts/ModalContext";
-import { useAccount, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "@particle-network/connectkit";
 
 export default function LandingPage() {
   const [isMobile, setIsMobile] = useState(false);

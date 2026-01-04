@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useConnect, useAccount, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect, useWallets, useModal, ConnectButton } from "@particle-network/connectkit";
 import {
   X,
   Wallet,
@@ -57,9 +57,10 @@ export default function WalletConnectModal({
   onClose,
   onSuccess,
 }: WalletConnectModalProps) {
-  const { connectors, connect, status, error } = useConnect();
   const { isConnected, address } = useAccount();
   const { disconnect } = useDisconnect();
+  const { setOpen } = useModal();
+  const [primaryWallet] = useWallets();
   const { walletData, fetchWalletData, isOnBSC, switchToBSC } =
     useWalletManager();
   const router = useRouter();
@@ -181,27 +182,14 @@ export default function WalletConnectModal({
     }
   };
 
-  const handleConnect = async (connector: any) => {
+  const handleConnect = async () => {
     if (!acceptTerms) {
       alert("Please accept the Terms and Conditions to continue.");
       return;
     }
 
-    setSelectedConnector(connector.id);
-    try {
-      await connect({ connector });
-    } catch (error) {
-      console.error("Connection failed:", error);
-      setSelectedConnector(null);
-    }
-  };
-
-  const getConnectorByName = (name: string) => {
-    return connectors.find(
-      (connector) =>
-        connector.name.toLowerCase().includes(name.toLowerCase()) ||
-        connector.id.toLowerCase().includes(name.toLowerCase())
-    );
+    // Open Particle Network's connect modal
+    setOpen(true);
   };
 
   // Desktop and Mobile animations
@@ -373,20 +361,15 @@ export default function WalletConnectModal({
                   {/* Popular Wallets */}
                   <div className="space-y-2 sm:space-y-2">
                     {popularWallets.map((wallet) => {
-                      const connector = getConnectorByName(wallet.id);
                       const isLoading = selectedConnector === wallet.id;
 
                       return (
                         <motion.button
                           key={wallet.id}
                           onClick={() => {
-                            if (connector) {
-                              handleConnect(connector);
-                            }
+                            handleConnect();
                           }}
-                          disabled={
-                            status === "pending" || isLoading || !connector || !acceptTerms
-                          }
+                          disabled={isLoading || !acceptTerms}
                           className={`w-full bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-xl transition-all duration-200 group disabled:opacity-50 ${
                             isMobile ? "p-3" : "p-4 sm:p-3"
                           }`}
@@ -494,7 +477,7 @@ export default function WalletConnectModal({
                               isMobile ? "text-sm" : "text-sm sm:text-base"
                             }`}
                           >
-                            See all {connectors.length} available wallet options
+                            See all available wallet options
                           </div>
                         </div>
                       </div>
@@ -517,47 +500,11 @@ export default function WalletConnectModal({
                     <span>Back</span>
                   </button>
 
-                  {/* All Wallets */}
+                  {/* All Wallets - Use Particle's ConnectButton */}
                   <div className="space-y-3 sm:space-y-4">
-                    {connectors.map((connector) => (
-                      <motion.button
-                        key={connector.uid}
-                        onClick={() => handleConnect(connector)}
-                        disabled={
-                          status === "pending" ||
-                          selectedConnector === connector.id ||
-                          !acceptTerms
-                        }
-                        className={`w-full flex items-center justify-between bg-[#0C0C0C] hover:bg-[#222] border border-[#292525] rounded-lg transition-all duration-200 disabled:opacity-50 ${
-                          isMobile ? "p-3" : "p-3 sm:p-4"
-                        }`}
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                      >
-                        <div className="flex items-center space-x-3 sm:space-x-4">
-                          <div
-                            className={`bg-gray-700 rounded-lg flex items-center justify-center ${
-                              isMobile ? "w-8 h-8" : "w-8 h-8 sm:w-10 sm:h-10"
-                            }`}
-                          >
-                            <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
-                          </div>
-                          <span
-                            className={`text-white font-medium font-montserrat ${
-                              isMobile ? "text-base" : "text-base sm:text-lg"
-                            }`}
-                          >
-                            {connector.name}
-                          </span>
-                        </div>
-
-                        {selectedConnector === connector.id ? (
-                          <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-[#622DBF] border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                        )}
-                      </motion.button>
-                    ))}
+                    <div className="w-full">
+                      <ConnectButton />
+                    </div>
                   </div>
                 </>
               )}

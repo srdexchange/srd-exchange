@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { useAccount, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "@particle-network/connectkit";
 import { useModal } from "@/contexts/ModalContext";
 import { LogOut, User } from "lucide-react";
 import { useRouter } from "next/navigation";

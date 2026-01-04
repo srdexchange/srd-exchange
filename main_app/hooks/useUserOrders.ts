@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount } from '@particle-network/connectkit';
 
 interface Order {
   id: string;

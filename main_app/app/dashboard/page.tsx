@@ -1,15 +1,33 @@
 "use client";
 
-import BuySellSection from '@/components/buysellSection';
 import SimpleNav from '@/components/simple-nav';
-import Orders from '@/components/orders';
 import AuthGuard from '@/components/auth/AuthGuard';
-import { useDisconnect } from 'wagmi';
+import { useDisconnect } from '@particle-network/connectkit';
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
-import React from 'react';
+import React, { Suspense } from 'react';
 import Footer from '@/components/footer';
+import dynamic from 'next/dynamic';
+
+// Lazy load the heavy components
+const BuySellSection = dynamic(() => import('@/components/buysellSection'), {
+  loading: () => (
+    <div className="flex justify-center items-center min-h-[400px] bg-black">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+    </div>
+  ),
+  ssr: false // Disable SSR for this component since it uses wallet hooks
+});
+
+const Orders = dynamic(() => import('@/components/orders'), {
+  loading: () => (
+    <div className="flex justify-center items-center min-h-[200px] bg-black">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
+    </div>
+  ),
+  ssr: false
+});
 
 export default function Dashboard() {
     const { disconnect } = useDisconnect();
