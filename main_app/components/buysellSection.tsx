@@ -1670,8 +1670,8 @@ async function verifyGasStationApproval(
     });
 
     // Check current allowance
-    if (!publicClient || !('readContract' in publicClient)) throw new Error("Public client not available");
-    const currentAllowance = await (publicClient as any).readContract({
+    if (!usePublicClient || !('readContract' in usePublicClient)) throw new Error("Public client not available");
+    const currentAllowance = await (usePublicClient as any).readContract({
       address: CONTRACTS.USDT[56],
       abi: USDT_ABI,
       functionName: "allowance",

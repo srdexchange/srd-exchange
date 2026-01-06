@@ -1,15 +1,22 @@
-'use client'
+'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ParticleConnectkit } from '@/lib/connectkit'
-import FontProvider from './FontProvider'
-import { ReactNode } from 'react'
+// CRITICAL: Import polyfills BEFORE any Particle imports
+import '@/lib/particlePolyfills';
 
-// Note: Particle Network requires environment variables to be set in .env.local:
-// NEXT_PUBLIC_PROJECT_ID, NEXT_PUBLIC_CLIENT_KEY, NEXT_PUBLIC_APP_ID
-// Get these from: https://dashboard.particle.network
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ParticleConnectkit } from '@/lib/connectkit';
+import FontProvider from './FontProvider';
+import { ReactNode, useMemo } from 'react';
 
-const queryClient = new QueryClient()
+// Create QueryClient outside component to prevent re-creation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 export default function Providers({ children }: { children: ReactNode }) {
   return (
@@ -21,5 +28,5 @@ export default function Providers({ children }: { children: ReactNode }) {
         </div>
       </QueryClientProvider>
     </ParticleConnectkit>
-  )
+  );
 }

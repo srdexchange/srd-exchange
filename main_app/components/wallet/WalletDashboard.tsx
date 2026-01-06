@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useConnect, useAccount, useDisconnect } from 'wagmi'
+import { useAccount, useDisconnect, useModal as useParticleModal } from '@particle-network/connectkit'
 import { X, ChevronRight, CheckCircle2, Wallet, RefreshCw, Copy, ExternalLink, TrendingUp, TrendingDown, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useWalletManager } from '@/hooks/useWalletManager'
@@ -46,9 +46,9 @@ export default function WalletConnectModal({
   onClose, 
   onSuccess 
 }: WalletConnectModalProps) {
-  const { setOpen } = useModal()
   const { isConnected, address } = useAccount()
   const { disconnect } = useDisconnect()
+  const { setOpen: openParticleModal } = useParticleModal()
   const { walletData, fetchWalletData, isOnBSC, switchToBSC } = useWalletManager()
   const router = useRouter()
 
@@ -133,14 +133,16 @@ export default function WalletConnectModal({
     }
   }
 
-  const handleConnect = async () => {
+  const handleConnect = async (wallet?: { id: string }) => {
     if (!acceptedTerms) {
-      alert("Please accept the Terms and Conditions to continue.");
-      return;
+      alert("Please accept the Terms and Conditions to continue.")
+      return
     }
-    
+
+    if (wallet?.id) setSelectedConnector(wallet.id)
+
     // Open Particle Network's connect modal
-    setOpen(true);
+    openParticleModal(true)
   }
 
   // Loading states
@@ -148,7 +150,7 @@ export default function WalletConnectModal({
     return (
       <AnimatePresence>
         {isOpen && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]">
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-9999">
             <motion.div className="bg-[#111010] rounded-xl p-8 max-w-md w-full mx-4">
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-[#622DBF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -170,7 +172,7 @@ export default function WalletConnectModal({
     return (
       <AnimatePresence>
         {isOpen && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]">
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-9999">
             <motion.div className="bg-[#111010] rounded-xl p-8 max-w-md w-full mx-4">
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -192,7 +194,7 @@ export default function WalletConnectModal({
     return (
       <AnimatePresence>
         {isOpen && (
-          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999]">
+          <motion.div className="fixed inset-0 bg-black/80 flex items-center justify-center z-9999">
             <motion.div className="bg-[#111010] rounded-xl p-8 max-w-md w-full mx-4">
               <div className="text-center">
                 <motion.div
@@ -228,7 +230,7 @@ export default function WalletConnectModal({
       {isOpen && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/80 z-[9998]"
+            className="fixed inset-0 bg-black/80 z-9998"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -236,7 +238,7 @@ export default function WalletConnectModal({
           />
           
           <motion.div
-            className="fixed inset-0 flex items-center justify-center z-[9997] p-4"
+            className="fixed inset-0 flex items-center justify-center z-9997 p-4"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
@@ -266,7 +268,7 @@ export default function WalletConnectModal({
                 {walletOptions.map((wallet) => {
                   const isLoading = selectedConnector === wallet.id
                   const isComingSoon = wallet.status === 'Coming soon'
-                  const isDisabled = isLoading || isComingSoon || status === 'pending' || !acceptedTerms
+                  const isDisabled = isLoading || isComingSoon || !acceptedTerms
                   
                   return (
                     <motion.button
@@ -346,19 +348,6 @@ export default function WalletConnectModal({
                   </div>
                 </div>
               </div>
-
-              {/* Error Display */}
-              {error && (
-                <motion.div
-                  className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <p className="text-red-400 text-sm">
-                    {error.message}
-                  </p>
-                </motion.div>
-              )}
 
               {/* Terms Required Message */}
               {!acceptedTerms && (
