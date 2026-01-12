@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useAccount, useDisconnect, useModal } from "@particle-network/connectkit";
 
 export default function LandingPage() {
@@ -9,6 +10,7 @@ export default function LandingPage() {
   const { setOpen } = useModal();
   const { isConnected } = useAccount();
   const { disconnect } = useDisconnect();
+  const router = useRouter();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -32,31 +34,20 @@ export default function LandingPage() {
     }
   }, []);
 
-  const handleTradeNow = () => {
-    // If user is already connected, disconnect first to allow fresh login
+  // Redirect to dashboard when user connects
+  useEffect(() => {
     if (isConnected) {
-      disconnect();
-      
-      // Clear storage and wait a bit before opening modal
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('user-session');
-        sessionStorage.clear();
-        
-        const keysToRemove = Object.keys(localStorage).filter(key => 
-          key.includes('wagmi') || 
-          key.includes('wallet') || 
-          key.includes('user') ||
-          key.includes('auth')
-        );
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-      }
-      
-      // Wait a moment then open wallet modal for fresh connection
-      setTimeout(() => {
-        setOpen(true);
-      }, 500);
+      console.log('User connected, redirecting to dashboard...');
+      router.push('/dashboard');
+    }
+  }, [isConnected, router]);
+
+  const handleTradeNow = () => {
+    if (isConnected) {
+      // If already connected, redirect to dashboard immediately
+      router.push('/dashboard');
     } else {
-      // User not connected, open modal normally
+      // If not connected, open the wallet modal for connection
       setOpen(true);
     }
   };

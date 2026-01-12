@@ -146,8 +146,8 @@ export default function CompleteProfilePage() {
     setIsSubmitting(true);
     setError(null);
 
-    try {
-      // Prepare the data to send
+    // Helper to call complete-profile
+    const completeProfile = async () => {
       const requestData = {
         walletAddress: address,
         upiId: upiId.trim(),
@@ -158,7 +158,6 @@ export default function CompleteProfilePage() {
           accountHolderName: bankDetails.accountHolderName,
         } : null,
       };
-
       const response = await fetch("/api/auth/complete-profile", {
         method: "POST",
         headers: {
@@ -166,13 +165,35 @@ export default function CompleteProfilePage() {
         },
         body: JSON.stringify(requestData),
       });
+      return response;
+    };
 
-      const data = await response.json();
+    try {
+      let response = await completeProfile();
+      let data = await response.json();
+
+      // If user not found, register and retry
+      if (response.status === 404 && data?.error?.includes("register")) {
+        // Register user
+        const regRes = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress: address }),
+        });
+        if (regRes.ok) {
+          // Retry profile completion
+          response = await completeProfile();
+          data = await response.json();
+        } else {
+          const regData = await regRes.json();
+          setError(regData.error || "Registration failed");
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       if (response.ok) {
         setIsSuccess(true);
-        
-        // Show success message briefly, then redirect
         setTimeout(() => {
           if (data.user.role === "ADMIN") {
             router.push("/admin");
