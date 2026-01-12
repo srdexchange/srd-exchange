@@ -1,20 +1,21 @@
 'use client';
 
 import './particlePolyfills';
-
+import { SmartAccount } from '@particle-network/aa';
 import { ConnectKitProvider, createConfig } from '@particle-network/connectkit';
 import { authWalletConnectors } from '@particle-network/connectkit/auth';
-import { bsc } from '@particle-network/connectkit/chains';
+import { bsc, mainnet } from '@particle-network/connectkit/chains';
 import { evmWalletConnectors } from '@particle-network/connectkit/evm';
 import { wallet, EntryPosition } from '@particle-network/connectkit/wallet';
 import React from 'react';
 import { particleAuth } from '@particle-network/auth-core';
-
+import { aa } from "@particle-network/connectkit/aa";
 // Retrieve environment variables
 let projectId = process.env.NEXT_PUBLIC_PROJECT_ID as string;
 let clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY as string;
 let appId = process.env.NEXT_PUBLIC_APP_ID as string;
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID as string;
+
 
 // Validate environment variables
 if (!projectId || !clientKey || !appId) {
@@ -53,7 +54,11 @@ function ensureAuthCoreInitialized() {
   } catch (error) {
     console.error('AuthCore failed to initialize', error);
   }
+
 }
+
+
+
 
 const config = createConfig({
   projectId,
@@ -61,27 +66,23 @@ const config = createConfig({
   appId,
   chains: [bsc],
   appearance: {
-    recommendedWallets: [
-      { walletId: 'metaMask', label: 'Recommended' },
-      { walletId: 'binanceWallet', label: 'Popular' },
-      { walletId: 'coinbaseWallet', label: 'Popular' },
-    ],
     splitEmailAndPhone: false,
     collapseWalletList: false,
-    hideContinueButton: false,
-    connectorsOrder: ['email', 'phone', 'social', 'wallet'],
+    connectorsOrder: ['email', 'phone', 'social', 'wallet', 'passkey'],
     language: 'en-US',
-    mode: 'light',
+    mode: 'dark',
     theme: {
-      '--pcm-accent-color': '#622DBF',
-      '--pcm-body-background': '#ffffff',
-      '--pcm-body-background-secondary': '#f9fafb',
-      '--pcm-body-background-tertiary': '#f3f4f6',
+      '--pcm-accent-color': '#151515',
+      '--pcm-body-background': '#000000',
+      '--pcm-body-background-secondary': '#000000',
+      '--pcm-body-background-tertiary': '#000000',
       '--pcm-overlay-background': 'rgba(0, 0, 0, 0.6)',
       '--pcm-overlay-backdrop-filter': 'blur(8px)',
       '--pcm-modal-box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
     },
+    logo: '/srd_final.svg'
   },
+  
   walletConnectors: [
     evmWalletConnectors({
       metadata: {
@@ -112,9 +113,15 @@ const config = createConfig({
   plugins: [
     wallet({
       entryPosition: EntryPosition.BR,
-      visible: true,
+      visible: false,
     }),
-  ],
+    aa({
+      name: "BICONOMY",
+      version: "2.0.0",
+    }),
+    
+  ]
+  
 });
 
 // Use a singleton pattern to prevent multiple initializations
