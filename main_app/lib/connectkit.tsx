@@ -19,7 +19,7 @@ const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID 
 
 // Validate environment variables
 if (!projectId || !clientKey || !appId) {
-  console.warn('⚠️  Particle Network configuration missing!');
+  console.warn(' Particle Network configuration missing!');
   console.warn('Please set the following environment variables in .env.local:');
   console.warn('- NEXT_PUBLIC_PROJECT_ID');
   console.warn('- NEXT_PUBLIC_CLIENT_KEY');
@@ -72,7 +72,7 @@ const config = createConfig({
     language: 'en-US',
     mode: 'dark',
     theme: {
-      '--pcm-accent-color': '#151515',
+      '--pcm-accent-color': '#ffffff',
       '--pcm-body-background': '#000000',
       '--pcm-body-background-secondary': '#000000',
       '--pcm-body-background-tertiary': '#000000',
@@ -80,7 +80,10 @@ const config = createConfig({
       '--pcm-overlay-backdrop-filter': 'blur(8px)',
       '--pcm-modal-box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
     },
-    logo: '/srd_final.svg'
+    logo: '/srd_final.svg',
+    recommendedWallets: [   
+      { walletId: "bianance", label: "Popular" },
+    ],
   },
   
   walletConnectors: [
