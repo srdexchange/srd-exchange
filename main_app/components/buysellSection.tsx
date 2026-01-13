@@ -7,7 +7,7 @@ import { useWalletManager } from "@/hooks/useWalletManager";
 import { useUserOrders } from "@/hooks/useUserOrders";
 import { useRates } from "@/hooks/useRates";
 import { useModalState } from "@/hooks/useModalState";
-import { useAccount } from "@particle-network/connectkit";
+import { useAccount, useSmartAccount } from "@particle-network/connectkit";
 import BuyCDMModal from "./modal/buy-cdm";
 import BuyUPIModal from "./modal/buy-upi";
 import SellUPIModal from "./modal/sell-upi";
@@ -16,7 +16,7 @@ import BankDetailsModal, { BankDetailsData } from "./modal/bank-details-modal";
 import { useBankDetails } from "@/hooks/useBankDetails";
 import { usePublicClient } from "@particle-network/connectkit";
 import { config } from "@/lib/wagmi";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, encodeFunctionData } from "viem";
 
 const CONTRACTS = {
   P2P_TRADING: {
@@ -28,6 +28,16 @@ const CONTRACTS = {
 };
 
 const USDT_ABI = [
+  {
+    inputs: [
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "transfer",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
   {
     inputs: [
       { internalType: "address", name: "owner", type: "address" },
@@ -46,6 +56,7 @@ export default function BuySellSection() {
   const CDM_MAX_USDT = 500;
 
   const { chainId } = useAccount();
+  const smartAccount = useSmartAccount();
   const [activeTab, setActiveTab] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [amount, setAmount] = useState("");
@@ -60,6 +71,8 @@ export default function BuySellSection() {
   const [needsGasStationApproval, setNeedsGasStationApproval] = useState(false);
   const [fundingApproval, setFundingApproval] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string | null>(null);
 
   const { saveModalState } = useModalState();
 
@@ -128,6 +141,61 @@ export default function BuySellSection() {
 
   const handleRefresh = async () => {
     await Promise.all([refetchBalances(), refetchOrders()]);
+  };
+
+  const executeTxNative = async () => {
+    if (!smartAccount) return;
+
+    setIsSending(true);
+    try {
+      // Admin address for receiving USDT
+      const adminAddress = "0x16071780eaaa5e5ac7a31ca2485026eb24071662" as `0x${string}`;
+
+      // Get the USDT amount from input
+      const transferAmount = activeTab === "sell" ? usdtAmount : calculateUSDT(amount);
+      if (!transferAmount || parseFloat(transferAmount) <= 0) {
+        throw new Error("Invalid USDT amount");
+      }
+
+      // Convert USDT amount to wei (USDT uses 18 decimals on BSC)
+      const usdtAmountWei = parseUnits(transferAmount, 18);
+
+      // Encode the USDT transfer function call
+      const transferData = encodeFunctionData({
+        abi: USDT_ABI,
+        functionName: 'transfer',
+        args: [adminAddress, usdtAmountWei],
+      });
+
+      // Prepare transaction parameters
+      const tx = {
+        to: CONTRACTS.USDT[56],
+        value: "0x0", // No native token value for USDT transfer
+        data: transferData,
+      };
+
+      // Get fee quotes for gasless transaction
+      const feeQuotesResult = await smartAccount.getFeeQuotes(tx);
+      const gaslessQuote = feeQuotesResult?.verifyingPaymasterGasless;
+
+      if (!gaslessQuote) {
+        throw new Error("Failed to get gasless fee quote");
+      }
+
+      // Send the user operation
+      const hash = await smartAccount.sendUserOperation({
+        userOp: gaslessQuote.userOp,
+        userOpHash: gaslessQuote.userOpHash,
+      });
+
+      setTransactionHash(hash);
+      console.log("✅ USDT transfer successful:", hash);
+    } catch (error) {
+      console.error("❌ Error sending USDT transaction:", error);
+      throw error;
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const usdtAmount = calculateUSDT(amount);
