@@ -1,6 +1,6 @@
 'use client'
 
-import { useAccount } from '@particle-network/connectkit'
+import { useAccount, useModal } from '@particle-network/connectkit'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -13,6 +13,7 @@ interface AdminAuthGuardProps {
 
 export default function AdminAuthGuard({ children }: AdminAuthGuardProps) {
   const { isConnected, address } = useAccount()
+  const { setOpen } = useModal()
   const router = useRouter()
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [isVerifying, setIsVerifying] = useState(true)
@@ -128,7 +129,7 @@ export default function AdminAuthGuard({ children }: AdminAuthGuardProps) {
             )}
 
             <motion.button
-              onClick={() => setShowWalletModal(true)}
+              onClick={() => setOpen(true)}
               className="bg-[#622DBF] text-white px-8 py-3 rounded-lg font-semibold hover:bg-purple-700 transition-all transform hover:scale-105 shadow-lg shadow-purple-600/25 font-montserrat"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
