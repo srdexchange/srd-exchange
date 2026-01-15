@@ -72,7 +72,7 @@ const config = createConfig({
     language: 'en-US',
     mode: 'dark',
     theme: {
-      '--pcm-accent-color': '#ffffff',
+      '--pcm-accent-color': '#622DBF',
       '--pcm-body-background': '#000000',
       '--pcm-body-background-secondary': '#000000',
       '--pcm-body-background-tertiary': '#000000',
