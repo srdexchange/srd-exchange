@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, ensureConnection } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
+    // Ensure database connection before queries
+    await ensureConnection();
+
     const body = await request.json();
     const { walletAddress, accountNumber, ifscCode, branchName, accountHolderName } = body;
 
@@ -34,10 +37,10 @@ export async function POST(request: NextRequest) {
     if (!user) {
       console.error('❌ User not found for wallet address:', walletAddress);
       console.error('❌ Searched with normalized address:', normalizedWalletAddress);
-      
+
       // Let's also try to find if user exists with different casing
       const userWithDifferentCasing = await prisma.user.findFirst({
-        where: { 
+        where: {
           walletAddress: {
             equals: walletAddress,
             mode: 'insensitive' // This makes the search case-insensitive
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
       if (userWithDifferentCasing) {
         console.log('✅ Found user with different casing:', userWithDifferentCasing.walletAddress);
         console.log('🔄 Will proceed with user ID:', userWithDifferentCasing.id);
-        
+
         // Use the found user
         const bankDetails = await prisma.bankDetails.upsert({
           where: { userId: userWithDifferentCasing.id },
@@ -89,7 +92,7 @@ export async function POST(request: NextRequest) {
           }
         });
       }
-      
+
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
@@ -143,13 +146,14 @@ export async function POST(request: NextRequest) {
       { success: false, error: 'Failed to save bank details. Please try again.' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
+    // Ensure database connection before queries
+    await ensureConnection();
+
     const { searchParams } = new URL(request.url);
     const walletAddress = searchParams.get('walletAddress');
 
@@ -174,7 +178,7 @@ export async function GET(request: NextRequest) {
     // If not found with lowercase, try case-insensitive search
     if (!user) {
       user = await prisma.user.findFirst({
-        where: { 
+        where: {
           walletAddress: {
             equals: walletAddress,
             mode: 'insensitive'
@@ -205,7 +209,5 @@ export async function GET(request: NextRequest) {
       { success: false, error: 'Failed to fetch bank details' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

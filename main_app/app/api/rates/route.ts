@@ -2,10 +2,13 @@
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { prisma, ensureConnection } from '@/lib/prisma'
 
 export async function GET(_request: NextRequest) {
   try {
+    // Ensure database connection before queries
+    await ensureConnection()
+
     const rates = await prisma.rate.findMany({
       where: { type: 'CURRENT' },
       orderBy: { updatedAt: 'desc' },
