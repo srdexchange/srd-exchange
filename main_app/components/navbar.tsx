@@ -11,6 +11,7 @@ export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const { isConnected, address } = useAccount();
   const { setOpen } = useModal(); // ConnectKit's modal
   const { disconnect } = useDisconnect();
@@ -27,19 +28,6 @@ export default function Navbar() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Redirect to terms and conditions on first wallet connection
-  useEffect(() => {
-    if (isConnected && address) {
-      // Check if user has already accepted terms
-      const hasAcceptedTerms = localStorage.getItem(`terms_accepted_${address}`);
-      
-      if (!hasAcceptedTerms) {
-        // Redirect to terms and conditions page
-        router.push('/terms-and-conditions');
-      }
-    }
-  }, [isConnected, address, router]);
-
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -53,8 +41,25 @@ export default function Navbar() {
 
   const handleConnectWallet = () => {
     if (!isConnected) {
-      setOpen(true);
+      // Check if user has already accepted terms globally
+      const hasAcceptedTerms = localStorage.getItem('terms_accepted_global');
+      
+      if (!hasAcceptedTerms) {
+        // Show terms modal first
+        setShowTermsModal(true);
+      } else {
+        // Directly open wallet connection
+        setOpen(true);
+      }
     }
+  };
+
+  const handleAcceptTerms = () => {
+    // Store global acceptance
+    localStorage.setItem('terms_accepted_global', 'true');
+    setShowTermsModal(false);
+    // Now open wallet connection modal
+    setOpen(true);
   };
 
   const handleDisconnect = () => {
@@ -454,6 +459,94 @@ export default function Navbar() {
                   )}
                 </div>
               </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Terms Agreement Modal */}
+      <AnimatePresence>
+        {showTermsModal && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowTermsModal(false)}
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-[#1A1A1A] border border-gray-700 rounded-xl shadow-2xl max-w-md w-full p-6 pointer-events-auto font-montserrat"
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Icon */}
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-purple-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h2 className="text-2xl font-bold text-white text-center mb-3">
+                  Terms & Conditions
+                </h2>
+
+                {/* Message */}
+                <p className="text-gray-300 text-center mb-6 leading-relaxed">
+                  By connecting your wallet, you are agreeing to our{' '}
+                  <button
+                    onClick={() => {
+                      setShowTermsModal(false);
+                      router.push('/terms-and-conditions');
+                    }}
+                    className="text-purple-400 hover:text-purple-300 underline font-medium"
+                  >
+                    Terms and Conditions
+                  </button>
+                  .
+                </p>
+
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => setShowTermsModal(false)}
+                    className="flex-1 px-6 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAcceptTerms}
+                    className="flex-1 px-6 py-3 rounded-lg bg-[#622DBF] hover:bg-purple-700 text-white transition-colors font-bold shadow-lg hover:shadow-purple-600/40"
+                  >
+                    Accept & Connect
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           </>
         )}
