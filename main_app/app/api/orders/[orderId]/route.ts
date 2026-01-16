@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 // PATCH - Update order
 export async function PATCH(
@@ -39,8 +37,6 @@ export async function PATCH(
       { error: 'Failed to update order' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -67,7 +63,5 @@ export async function DELETE(
       { error: 'Failed to delete order' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }

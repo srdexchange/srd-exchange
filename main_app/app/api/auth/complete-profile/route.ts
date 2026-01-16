@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,14 +42,14 @@ export async function POST(request: NextRequest) {
     console.log("User updated with profile completed:", user.profileCompleted);
 
     // Handle bank details only if provided and complete
-    if (bankDetails && 
-        bankDetails.accountNumber && 
-        bankDetails.ifscCode && 
-        bankDetails.branchName && 
-        bankDetails.accountHolderName) {
-      
+    if (bankDetails &&
+      bankDetails.accountNumber &&
+      bankDetails.ifscCode &&
+      bankDetails.branchName &&
+      bankDetails.accountHolderName) {
+
       console.log("Saving bank details...");
-      
+
       // Check if bank details already exist for this user
       const existingBankDetails = await prisma.bankDetails.findUnique({
         where: { userId: user.id }
@@ -114,7 +112,5 @@ export async function POST(request: NextRequest) {
       { error: "Failed to complete profile" },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

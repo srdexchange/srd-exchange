@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,11 +66,11 @@ export async function POST(request: NextRequest) {
 
       if (existingUser) {
         console.log(`Registration attempt - User already exists:`, { id: existingUser.id, role: existingUser.role })
-        
+
         // If user exists but role needs to be updated (e.g., user becoming admin)
         if (existingUser.role !== role) {
           console.log(`Updating user role from ${existingUser.role} to ${role}`)
-          
+
           const updatedUser = await prisma.user.update({
             where: { walletAddress: normalizedAddress },
             data: {
@@ -149,8 +147,6 @@ export async function POST(request: NextRequest) {
       { error: 'Authentication failed' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -164,6 +160,6 @@ function determineUserRole(walletAddress: string): 'USER' | 'ADMIN' {
 
   const isAdmin = adminWallets.includes(walletAddress) || adminWallets.map(addr => addr.toLowerCase()).includes(walletAddress.toLowerCase())
   console.log(`Result: ${isAdmin ? 'ADMIN' : 'USER'}`)
-  
+
   return isAdmin ? 'ADMIN' : 'USER'
 }

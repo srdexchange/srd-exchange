@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient, OrderStatus } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { OrderStatus } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 // GET - Fetch user's orders
 export async function GET(request: NextRequest) {
@@ -75,17 +74,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     console.log('📥 Orders API - POST request received');
-    
+
     const body = await request.json()
     console.log('📋 Request body:', body);
-    
-    const { 
-      walletAddress, 
-      orderType, 
-      amount, 
-      usdtAmount, 
-      buyRate, 
-      sellRate, 
+
+    const {
+      walletAddress,
+      orderType,
+      amount,
+      usdtAmount,
+      buyRate,
+      sellRate,
       paymentMethod,
       blockchainOrderId,
       status
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     if (!orderType) {
       console.error('❌ Missing orderType');
       return NextResponse.json(
@@ -107,7 +106,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     if (!amount || isNaN(parseFloat(amount))) {
       console.error('❌ Invalid amount:', amount);
       return NextResponse.json(
@@ -145,7 +144,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       console.log('👤 Creating new user for wallet:', walletAddress);
       user = await prisma.user.create({
-        data: { 
+        data: {
           walletAddress: walletAddress.toLowerCase(),
           role: 'USER'
         }
@@ -190,7 +189,7 @@ export async function POST(request: NextRequest) {
       type: orderType.replace('_', ' '),
       orderType: order.orderType,
       price: Number(order.buyRate || sellRate || 0),
-      currency: order.orderType === 'BUY_CDM' || 'SELL_CDM' ? 'CDM' : 'UPI', 
+      currency: order.orderType === 'BUY_CDM' || 'SELL_CDM' ? 'CDM' : 'UPI',
       status: order.status,
       blockchainOrderId: order.blockchainOrderId,
       user: order.user,
@@ -206,16 +205,14 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Error in orders API:', error)
     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace')
-    
+
     return NextResponse.json(
-      { 
-        error: 'Failed to create order', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Failed to create order',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -261,7 +258,7 @@ function formatTime(date: Date): string {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const orderDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  
+
   const timeString = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',

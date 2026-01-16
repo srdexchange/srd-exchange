@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const walletAddress = searchParams.get('walletAddress')
-    
+
     if (!walletAddress) {
       return NextResponse.json(
         { error: 'Wallet address is required' },
@@ -72,8 +70,6 @@ export async function GET(request: NextRequest) {
       { error: 'Failed to fetch orders' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -81,7 +77,7 @@ function formatTime(date: Date): string {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const orderDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  
+
   const timeString = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',

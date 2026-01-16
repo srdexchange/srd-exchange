@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     // Profile completion logic: User must have UPI ID
     const hasUpiId = user.upiId && user.upiId.trim() !== '';
-    
+
     // Use the database profileCompleted field AND verify UPI ID exists
     const isProfileComplete = user.profileCompleted && hasUpiId;
 
@@ -62,7 +60,5 @@ export async function POST(request: NextRequest) {
       { error: 'Verification failed' },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
