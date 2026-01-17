@@ -1,12 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'cryptologos.cc',
+        pathname: '/logos/**',
+      },
+    ],
+  },
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
-  
+
     config.watchOptions = {
       ignored: ['../contracts/**', '../artifacts/**', '../cache/**']
     };
-    
- 
+
+
     if (!isServer) {
       config.resolve.fallback = {
         fs: false,
@@ -15,7 +24,7 @@ const nextConfig = {
         crypto: false,
       };
     }
-    
+
     return config;
   },
 };

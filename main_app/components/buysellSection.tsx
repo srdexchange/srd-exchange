@@ -97,15 +97,15 @@ export default function BuySellSection() {
   // Initialize ethers provider with gasless transaction mode
   const customProvider = smartAccount
     ? new ethers.BrowserProvider(
-        new AAWrapProvider(
-          smartAccount,
-          SendTransactionMode.Gasless
-        ) as Eip1193Provider,
-        "any"
-      )
+      new AAWrapProvider(
+        smartAccount,
+        SendTransactionMode.Gasless
+      ) as Eip1193Provider,
+      "any"
+    )
     : null;
 
-    const walletClient = primaryWallet?.getWalletClient();
+  const walletClient = primaryWallet?.getWalletClient();
 
 
   /**
@@ -121,76 +121,76 @@ export default function BuySellSection() {
     usdtDecimals: number
   ): Promise<string> => {
     if (!smartAccount) throw new Error('Smart account not initialized');
-    
+
     try {
       console.log(`🚀 Sending ${usdtAmount} USDT to ${recipientAddress} (gasless)`);
-      
+
       // Validate recipient address
       if (!ethers.isAddress(recipientAddress)) {
         throw new Error('Invalid recipient address format');
       }
-      
+
       // Validate amount
       const amount = parseFloat(usdtAmount);
       if (isNaN(amount) || amount <= 0) {
         throw new Error('Please enter a valid USDT amount');
       }
-      
+
       // Create contract interface for USDT transfer
       const iface = new ethers.Interface(erc20Abi);
       const parsedAmount = parseUnits(usdtAmount, usdtDecimals);
-      
+
       // Encode transfer function
       const data = iface.encodeFunctionData('transfer', [
         recipientAddress,
         parsedAmount
       ]);
-      
+
       // Prepare transaction
       const tx = {
         to: CONTRACTS.USDT[56],
         value: '0x0',
         data: data,
       };
-      
+
       console.log('📋 Getting gasless fee quotes...');
-      
+
       // Get fee quotes with timeout
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Fee quote timeout. Please try again.')), 30000)
       );
-      
+
       const feeQuotesResult = await Promise.race([
         smartAccount.getFeeQuotes(tx),
         timeoutPromise
       ]) as any;
-      
+
       if (!feeQuotesResult) {
         throw new Error('Failed to get fee quotes');
       }
-      
+
       const gaslessQuote = feeQuotesResult.verifyingPaymasterGasless;
-      
+
       if (!gaslessQuote) {
         throw new Error('Gasless transactions not available right now. Please try again later.');
       }
-      
+
       console.log('✅ Sending gasless user operation...');
-      
+
       // Send user operation
       const hash = await smartAccount.sendUserOperation({
         userOp: gaslessQuote.userOp,
         userOpHash: gaslessQuote.userOpHash,
       });
-      
+
       console.log('✅ Transaction hash:', hash);
       return hash;
-      
+
     } catch (error: any) {
       console.error('❌ Gasless USDT transfer error:', error);
-      
+
       let userMessage = 'Transaction failed: ';
-      
+
       if (error.message.includes('insufficient')) {
         userMessage += 'Insufficient USDT balance in your smart wallet.';
       } else if (error.message.includes('timeout')) {
@@ -202,14 +202,14 @@ export default function BuySellSection() {
       } else {
         userMessage += error.message || 'Unknown error occurred.';
       }
-      
+
       throw new Error(userMessage);
     }
   };
 
   // Wallet and orders data
   const {
-    address,
+    address: eoaAddress,
     isConnected,
     walletData,
     isLoading: walletLoading,
@@ -217,6 +217,9 @@ export default function BuySellSection() {
     createSellOrderOnChain,
     approveUSDT,
   } = useWalletManager();
+
+  // Prioritize smart wallet address for database orders
+  const address = walletData?.smartWallet?.address || eoaAddress;
 
   const {
     orders,
@@ -447,10 +450,10 @@ export default function BuySellSection() {
         userAddress: address,
         adminWallet: ADMIN_WALLET_ADDRESS
       });
-      
+
       // Get USDT decimals (BSC USDT uses 18 decimals)
       const usdtDecimals = 18;
-      
+
       // Send USDT directly to admin using gasless transfer
       console.log('💸 Initiating gasless USDT transfer to admin wallet...');
       const txHash = await sendGaslessUSDT(
@@ -458,15 +461,15 @@ export default function BuySellSection() {
         finalUsdtAmount,
         usdtDecimals
       );
-      
+
       console.log('✅ Gasless USDT transfer successful:', txHash);
-      
+
       // Wait for transaction confirmation
       console.log('⏳ Waiting for transaction confirmation...');
       await new Promise((resolve) => setTimeout(resolve, 8000));
-      
+
       console.log('📝 Creating database order after successful USDT transfer...');
-      
+
       // Create database order
       const orderPayload = {
         walletAddress: address,
@@ -480,7 +483,7 @@ export default function BuySellSection() {
         status: 'PENDING_ADMIN_PAYMENT',
         gasStationTxHash: txHash, // Store the gasless transfer hash
       };
-      
+
       const dbResponse = await fetch('/api/orders', {
         method: 'POST',
         headers: {
@@ -488,7 +491,7 @@ export default function BuySellSection() {
         },
         body: JSON.stringify(orderPayload),
       });
-      
+
       if (!dbResponse.ok) {
         const errorText = await dbResponse.text();
         console.error('❌ Database API response error:', errorText);
@@ -496,26 +499,26 @@ export default function BuySellSection() {
           `Database API error: ${dbResponse.status} - ${errorText}`
         );
       }
-      
+
       const data = await dbResponse.json();
-      
+
       if (!data.success) {
         console.error('❌ Database order creation failed:', data.error);
         throw new Error(data.error || 'Failed to create database order');
       }
-      
+
       const databaseOrder = data.order;
       console.log('✅ Sell order created - USDT transferred to admin via gasless transaction');
-      
+
       await Promise.all([refetchOrders(), refetchBalances()]);
       return databaseOrder;
-      
+
     } catch (sellError) {
       console.error('❌ Gasless sell order creation failed:', sellError);
-      
+
       const errorMessage =
         sellError instanceof Error ? sellError.message : String(sellError);
-      
+
       if (errorMessage.includes('Insufficient USDT balance')) {
         throw new Error(
           'Insufficient USDT balance. Please ensure you have enough USDT for this order.'
@@ -906,157 +909,7 @@ export default function BuySellSection() {
       <div className="bg-black text-white h-full flex items-center justify-center p-4 sm:p-8 max-w-4xl mx-auto">
         <div className="w-full space-y-4">
           {/* Enhanced Wallet Balance Card */}
-          <motion.div
-            className="bg-[#101010] max-w-md border border-[#3E3E3E] rounded-md p-4 mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {isConnected && address ? (
-              <div className="space-y-3">
-                {/* Wallet Address */}
-                <div className="flex justify-center items-center space-x-2 mb-3">
-                  <span className="text-xs font-mono text-gray-400">
-                    {walletData?.smartWallet?.address
-                      ? `${walletData.smartWallet.address.slice(0, 6)}...${walletData.smartWallet.address.slice(-4)}`
-                      : "..."}
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (walletData?.smartWallet?.address) {
-                        navigator.clipboard.writeText(walletData.smartWallet.address);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
-                      }
-                    }}
-                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <Copy className="w-3 h-3 text-gray-400" />
-                  </button>
-                  <a
-                    href={`https://bscscan.com/address/${walletData?.smartWallet?.address}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3 text-gray-400" />
-                  </a>
-                </div>
-                
 
-                {copied && (
-                  <motion.div
-                    className="text-center text-green-400 text-xs"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                  >
-                    Address copied!
-                  </motion.div>
-                )}
-
-                {/* Balance Display - Smart Wallet */}
-                <div className="text-center">
-                  <div className="flex items-center justify-center space-x-2 mb-1">
-                    <span className="text-xs text-white">
-                      Smart Wallet Balance
-                    </span>
-                    <button
-                      onClick={handleRefresh}
-                      disabled={walletLoading}
-                      className="text-gray-400 hover:text-white transition-colors"
-                    >
-                      <RefreshCw
-                        className={`w-3 h-3 ${
-                          walletLoading ? "animate-spin" : ""
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {walletLoading ? (
-                    <div className="text-lg sm:text-xl font-bold text-gray-400">
-                      Loading...
-                    </div>
-                  ) : (
-                    <>
-                      <div className="text-lg sm:text-xl font-bold text-white">
-                        {walletData?.smartWallet?.usdtBalance
-                          ? `${parseFloat(walletData.smartWallet.usdtBalance).toFixed(2)} USDT`
-                          : "0.00 USDT"}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1 flex items-center justify-center space-x-1">
-                        <span>≈</span>
-                        <span>
-                          ₹
-                          {walletData?.smartWallet?.usdtBalance
-                            ? (
-                                parseFloat(walletData.smartWallet.usdtBalance) *
-                                sellPrice
-                              ).toFixed(2)
-                            : "0.00"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {smartAccount ? "⚡ Gasless enabled" : ""}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Quick Stats */}
-                <div className="flex justify-between text-center pt-3 border-t border-gray-700">
-                  <div>
-                    <div className="text-xs text-gray-400">Total Orders</div>
-                    <div className="text-sm font-medium text-white">
-                      {ordersLoading ? "..." : orders.length}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400">Completed</div>
-                    <div className="text-sm font-medium text-green-400">
-                      {ordersLoading
-                        ? "..."
-                        : orders.filter((o) => o.status === "COMPLETED").length}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400">Pending</div>
-                    <div className="text-sm font-medium text-yellow-400">
-                      {ordersLoading
-                        ? "..."
-                        : orders.filter((o) =>
-                            [
-                              "PENDING",
-                              "ADMIN_APPROVED",
-                              "PAYMENT_SUBMITTED",
-                            ].includes(o.status)
-                          ).length}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="flex justify-center items-center space-x-2 sm:space-x-3 mb-3">
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center">
-                    <User className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </div>
-                  <span className="text-xs sm:text-sm text-gray-400 font-medium">
-                    Connect wallet to view balance
-                  </span>
-                </div>
-                <div className="text-center">
-                  <div className="text-xs text-gray-400 mb-1">
-                    Available Balance
-                  </div>
-                  <div className="text-lg sm:text-xl font-bold text-gray-500">
-                    -- USDT
-                  </div>
-                </div>
-              </div>
-            )}
-          </motion.div>
           {/* Price Display - Centered */}
           <motion.div
             className="flex justify-center max-w-md space-x-3 sm:space-x-6 mx-auto mb-6 sm:mb-10"
@@ -1096,11 +949,10 @@ export default function BuySellSection() {
               onClick={() => handleTabChange("buy")}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${
-                activeTab === "buy"
+              className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${activeTab === "buy"
                   ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
                   : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
-              }`}
+                }`}
             >
               Buy
             </motion.button>
@@ -1108,11 +960,10 @@ export default function BuySellSection() {
               onClick={() => handleTabChange("sell")}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${
-                activeTab === "sell"
+              className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${activeTab === "sell"
                   ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
                   : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
-              }`}
+                }`}
             >
               Sell
             </motion.button>
@@ -1138,11 +989,10 @@ export default function BuySellSection() {
                     transition={{ duration: 0.2 }}
                   >
                     <motion.div
-                      className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all ${
-                        paymentMethod === "upi"
+                      className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all ${paymentMethod === "upi"
                           ? "bg-[#622DBF] border-[#622DBF]"
                           : "bg-[#1E1C1C] border-[#3E3E3E]"
-                      }`}
+                        }`}
                       onClick={() => setPaymentMethod("upi")}
                       whileTap={{ scale: 0.9 }}
                     >
@@ -1185,11 +1035,10 @@ export default function BuySellSection() {
                     transition={{ duration: 0.2 }}
                   >
                     <motion.div
-                      className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center transition-all ${
-                        paymentMethod === "cdm"
+                      className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center transition-all ${paymentMethod === "cdm"
                           ? "bg-[#622DBF] border-[#622DBF]"
                           : "bg-[#1E1C1C] border-[#3E3E3E]"
-                      }`}
+                        }`}
                       onClick={() => setPaymentMethod("cdm")}
                       whileTap={{ scale: 0.9 }}
                     >
@@ -1230,7 +1079,7 @@ export default function BuySellSection() {
               </motion.div>
             )}
           </AnimatePresence>
-          
+
           {/* Amount Input Section */}
           <AnimatePresence>
             {activeTab && paymentMethod && (
@@ -1388,20 +1237,18 @@ export default function BuySellSection() {
                 {!isConnected
                   ? "Connect Wallet to Trade"
                   : bankDetailsLoading
-                  ? "Loading Bank Details..."
-                  : amountValidation.error
-                  ? "Amount Exceeds Limits"
-                  : isPlacingOrder
-                  ? `Placing ${activeTab === "buy" ? "Buy" : "Sell"} Order...`
-                  : paymentMethod === "cdm" && !bankDetails
-                  ? `Add Bank Details & ${activeTab === "buy" ? "Buy" : "Sell"}`
-                  : activeTab === "buy"
-                  ? `Buy ${amount ? calculateUSDT(amount) : ""} USDT for ₹${
-                      amount || "0"
-                    }`
-                  : `Sell ${amount || "0"} USDT for ₹${
-                      amount ? calculateRupee(amount) : "0"
-                    }`}
+                    ? "Loading Bank Details..."
+                    : amountValidation.error
+                      ? "Amount Exceeds Limits"
+                      : isPlacingOrder
+                        ? `Placing ${activeTab === "buy" ? "Buy" : "Sell"} Order...`
+                        : paymentMethod === "cdm" && !bankDetails
+                          ? `Add Bank Details & ${activeTab === "buy" ? "Buy" : "Sell"}`
+                          : activeTab === "buy"
+                            ? `Buy ${amount ? calculateUSDT(amount) : ""} USDT for ₹${amount || "0"
+                            }`
+                            : `Sell ${amount || "0"} USDT for ₹${amount ? calculateRupee(amount) : "0"
+                            }`}
               </motion.button>
             )}
           </AnimatePresence>
@@ -1559,14 +1406,13 @@ export default function BuySellSection() {
                             // Show success message
                             alert(
                               "✅ Sell order completed!\n\n" +
-                                `• ${storedUsdtAmount} USDT transferred to admin\n` +
-                                `• You will receive ₹${finalOrderAmount.toFixed(
-                                  2
-                                )}\n` +
-                                `• Order created: ${
-                                  data.order.fullId || data.order.id
-                                }\n\n` +
-                                "Admin will process your payment shortly."
+                              `• ${storedUsdtAmount} USDT transferred to admin\n` +
+                              `• You will receive ₹${finalOrderAmount.toFixed(
+                                2
+                              )}\n` +
+                              `• Order created: ${data.order.fullId || data.order.id
+                              }\n\n` +
+                              "Admin will process your payment shortly."
                             );
 
                             // Refresh data and reset form
@@ -1610,15 +1456,15 @@ export default function BuySellSection() {
                       ) {
                         alert(
                           "⏳ Approval Transaction Pending\n\n" +
-                            "Please wait for your approval transaction to be confirmed on the blockchain, then try again.\n\n" +
-                            "This usually takes 1-2 minutes."
+                          "Please wait for your approval transaction to be confirmed on the blockchain, then try again.\n\n" +
+                          "This usually takes 1-2 minutes."
                         );
                       } else if (
                         errorMessage.includes("Insufficient allowance")
                       ) {
                         alert(
                           "⚠️ Approval Issue\n\n" +
-                            "There seems to be an issue with the USDT approval. Please try the approval process again."
+                          "There seems to be an issue with the USDT approval. Please try the approval process again."
                         );
                       } else {
                         alert(`❌ Transaction failed: ${errorMessage}`);
@@ -1650,7 +1496,7 @@ export default function BuySellSection() {
                     "Approve & Transfer USDT"
                   )}
                 </motion.button>
-                
+
 
                 {/* Process Information */}
                 <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-4 mt-4">
@@ -1744,7 +1590,7 @@ export default function BuySellSection() {
               </div>
             </motion.div>
           )}
-          
+
         </div>
       </div>
 

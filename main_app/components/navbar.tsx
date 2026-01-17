@@ -164,140 +164,6 @@ export default function Navbar() {
                 </motion.button>
               ))}
             </div>
-
-            <div className="flex items-center space-x-4">
-              {isConnected && address ? (
-                <div className="relative">
-                  <motion.button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="bg-[#622DBF] text-white px-4 py-3 rounded-sm font-semibold transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-purple-500/25 font-montserrat"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <User className="w-4 h-4" />
-                    <span className="text-sm tracking-wide font-medium">
-                      {formatAddress(address)}
-                    </span>
-                  </motion.button>
-
-                  <AnimatePresence>
-                    {showUserMenu && (
-                      <motion.div
-                        className="absolute right-0 mt-2 w-48 bg-[#1A1A1A] border border-gray-700 rounded-lg shadow-xl z-50"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                      >
-                        <div className="p-3 border-b border-gray-700">
-                          <p className="text-gray-400 text-xs font-montserrat">Connected Wallet</p>
-                          <p className="text-white text-sm font-medium font-montserrat">{formatAddress(address)}</p>
-                        </div>
-                        <button
-                          onClick={handleDisconnect}
-                          className="w-full flex items-center space-x-2 px-3 py-2 text-red-400 hover:bg-red-500/10 transition-colors font-montserrat"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Disconnect</span>
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ) : (
-                <motion.button
-                  onClick={() => setOpen(true)}
-                  className="bg-[#622DBF] text-white px-4 py-3 rounded-sm font-semibold transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-purple-500/25 font-montserrat"
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{
-                    delay: 0.8,
-                    type: "spring",
-                    stiffness: 260,
-                    damping: 20,
-                  }}
-                  whileHover={{
-                    scale: 1.05,
-                    boxShadow: "0 10px 20px rgba(98, 45, 191, 0.3)",
-                  }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <span className="text-sm tracking-wide font-medium">
-                    CONNECT WALLET
-                  </span>
-                  <motion.svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    animate={!isMobile ? { x: [0, 3, 0] } : {}}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 7l5 5m0 0l-5 5m5-5H6"
-                    />
-                  </motion.svg>
-                </motion.button>
-              )}
-
-              <motion.div
-                className="flex pl-10 items-center space-x-2"
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{
-                  delay: 1,
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 20,
-                }}
-              >
-                <motion.a
-                  href="https://x.com/SrdExchange"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-9 h-9 flex items-center justify-center transition-all duration-200 hover:scale-110"
-                  whileHover={
-                    !isMobile
-                      ? {
-                          scale: 1.2,
-                          rotate: 360,
-                          backgroundColor: "rgba(98, 45, 191, 0.2)",
-                        }
-                      : { scale: 1.1 }
-                  }
-                  transition={{ duration: 0.3 }}
-                >
-                  <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                </motion.a>
-
-                <motion.a
-                  href="https://telegram.me/SrdExchangeGlobal"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-200 hover:scale-110"
-                  whileHover={
-                    !isMobile
-                      ? {
-                          scale: 1.2,
-                          rotate: -360,
-                          backgroundColor: "rgba(98, 45, 191, 0.2)",
-                        }
-                      : { scale: 1.1 }
-                  }
-                  transition={{ duration: 0.3 }}
-                >
-                  <motion.img
-                    src="/telegram.svg"
-                    alt=""
-                    whileHover={{ scale: 1.1 }}
-                  />
-                </motion.a>
-              </motion.div>
-            </div>
           </motion.div>
 
           <motion.div
@@ -411,7 +277,6 @@ export default function Navbar() {
                 </div>
 
                 <div className="p-6 border-t border-gray-800">
-                  {!isConnected || !address ? (
                     <motion.button
                       onClick={() => {
                         handleConnectWallet();
@@ -439,24 +304,6 @@ export default function Navbar() {
                         />
                       </svg>
                     </motion.button>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="text-center p-3 bg-[#1A1A1A] rounded-lg">
-                        <p className="text-gray-400 text-xs font-montserrat">Connected</p>
-                        <p className="text-white font-medium font-montserrat">{formatAddress(address)}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          handleDisconnect();
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className="w-full flex items-center justify-center space-x-2 px-6 py-3 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors font-montserrat"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Disconnect</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </motion.div>
