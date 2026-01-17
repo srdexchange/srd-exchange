@@ -73,15 +73,6 @@ export default function Dashboard() {
             <div className="bg-black">
                 <div className="flex justify-between items-center p-4">
                     <SimpleNav />
-                    <motion.button
-                        onClick={handleLogout}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center space-x-2 shadow-lg font-montserrat"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                    >
-                        <LogOut className="w-4 h-4" />
-                        <span>Logout</span>
-                    </motion.button>
                 </div>
                 <BuySellSection />
                 <Orders />
