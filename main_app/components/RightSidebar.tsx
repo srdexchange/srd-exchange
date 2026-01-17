@@ -20,8 +20,15 @@ import {
 import { FC, useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import Image from 'next/image'
-import { usePublicClient } from '@particle-network/connectkit'
-import { formatUnits, Address, parseAbiItem } from 'viem'
+import { usePublicClient, useSmartAccount } from '@particle-network/connectkit'
+import { formatUnits, Address, parseAbiItem, parseUnits, erc20Abi } from 'viem'
+import { ethers } from 'ethers'
+
+const CONTRACTS = {
+    USDT: {
+        [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`,
+    },
+}
 
 interface RightSidebarProps {
     isOpen: boolean
@@ -39,12 +46,130 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     const [copyStatus, setCopyStatus] = useState(false)
     const [sendAmount, setSendAmount] = useState('')
     const [recipientAddress, setRecipientAddress] = useState('')
+    const [isSending, setIsSending] = useState(false)
+    const [txHash, setTxHash] = useState<string | null>(null)
+    const [sendError, setSendError] = useState<string | null>(null)
 
 
     const [sellRate, setSellRate] = useState<number>(0)
     const [historyData, setHistoryData] = useState<any[]>([])
     const [isHistoryLoading, setIsHistoryLoading] = useState(false)
     const publicClient = usePublicClient()
+    const smartAccount = useSmartAccount()
+
+    const sendGaslessUSDT = async (
+        recipientAddress: string,
+        usdtAmount: string,
+        usdtDecimals: number
+    ): Promise<string> => {
+        if (!smartAccount) throw new Error('Smart account not initialized');
+
+        try {
+            console.log(`🚀 Sending ${usdtAmount} USDT to ${recipientAddress} (gasless)`);
+
+            // Validate recipient address
+            if (!ethers.isAddress(recipientAddress)) {
+                throw new Error('Invalid recipient address format');
+            }
+
+            // Validate amount
+            const amount = parseFloat(usdtAmount);
+            if (isNaN(amount) || amount <= 0) {
+                throw new Error('Please enter a valid USDT amount');
+            }
+
+            // Create contract interface for USDT transfer
+            const iface = new ethers.Interface(erc20Abi as any);
+            const parsedAmount = parseUnits(usdtAmount, usdtDecimals);
+
+            // Encode transfer function
+            const data = iface.encodeFunctionData('transfer', [
+                recipientAddress,
+                parsedAmount
+            ]);
+
+            // Prepare transaction
+            const tx = {
+                to: CONTRACTS.USDT[56],
+                value: '0x0',
+                data: data,
+            };
+
+            console.log('📋 Getting gasless fee quotes...');
+
+            // Get fee quotes with timeout
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Fee quote timeout. Please try again.')), 30000)
+            );
+
+            const feeQuotesResult = await Promise.race([
+                smartAccount.getFeeQuotes(tx),
+                timeoutPromise
+            ]) as any;
+
+            if (!feeQuotesResult) {
+                throw new Error('Failed to get fee quotes');
+            }
+
+            const gaslessQuote = feeQuotesResult.verifyingPaymasterGasless;
+
+            if (!gaslessQuote) {
+                throw new Error('Gasless transactions not available right now. Please try again later.');
+            }
+
+            console.log('✅ Sending gasless user operation...');
+
+            // Send user operation
+            const hash = await smartAccount.sendUserOperation({
+                userOp: gaslessQuote.userOp,
+                userOpHash: gaslessQuote.userOpHash,
+            });
+
+            console.log('✅ Transaction hash:', hash);
+            return hash;
+
+        } catch (error: any) {
+            console.error('❌ Gasless USDT transfer error:', error);
+
+            let userMessage = 'Transaction failed: ';
+
+            if (error.message.includes('insufficient')) {
+                userMessage += 'Insufficient USDT balance in your smart wallet.';
+            } else if (error.message.includes('timeout')) {
+                userMessage += 'Request timed out. Please check your connection and try again.';
+            } else if (error.message.includes('rejected')) {
+                userMessage += 'Transaction was rejected or canceled.';
+            } else if (error.message.includes('gasless')) {
+                userMessage += 'Gasless transactions are temporarily unavailable.';
+            } else {
+                userMessage += error.message || 'Unknown error occurred.';
+            }
+
+            throw new Error(userMessage);
+        }
+    };
+
+    const handleSend = async () => {
+        if (!recipientAddress || !sendAmount) return
+        setSendError(null)
+        setTxHash(null)
+        setIsSending(true)
+
+        try {
+            const hash = await sendGaslessUSDT(recipientAddress, sendAmount, 18)
+            setTxHash(hash)
+            setSendAmount('')
+            setRecipientAddress('')
+            // Refetch after a short delay
+            setTimeout(() => {
+                if (address) fetchOnChainHistory(address)
+            }, 5000)
+        } catch (err: any) {
+            setSendError(err.message)
+        } finally {
+            setIsSending(false)
+        }
+    }
 
     const fetchOnChainHistory = async (userAddress: string) => {
         if (!publicClient || !userAddress) return
@@ -235,7 +360,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                 </div>
             </div>
 
-            
+
         </div>
     )
 
@@ -252,6 +377,34 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                     Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
                 </p>
             </div>
+
+            {txHash && (
+                <div className="w-full p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col gap-2">
+                    <div className="flex items-center gap-2 text-green-500">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-bold">Transaction Sent!</span>
+                    </div>
+                    <a
+                        href={`https://bscscan.com/tx/${txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-green-500/80 hover:underline break-all"
+                    >
+                        View on BscScan: {txHash}
+                    </a>
+                </div>
+            )}
+
+            {sendError && (
+                <div className="w-full p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
+                    <div className="shrink-0 mt-0.5">
+                        <Info className="w-5 h-5 text-red-500" />
+                    </div>
+                    <p className="text-red-500 text-sm font-medium leading-tight">
+                        {sendError}
+                    </p>
+                </div>
+            )}
 
             {/* Address Input */}
             <div className="space-y-3">
@@ -317,13 +470,18 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
             {/* Send Button */}
             <div className="pt-4  mb-6 mt-auto">
                 <button
-                    disabled={!sendAmount || !recipientAddress}
+                    onClick={handleSend}
+                    disabled={!sendAmount || !recipientAddress || isSending}
                     className="w-full bg-[#6320EE] hover:bg-[#5219d1] disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-[0_8px_30px_rgb(99,32,238,0.3)]"
                 >
-                    <div className="w-4 h-4 border-2 border-white rounded-full flex items-center justify-center">
-                        <ArrowUpRight className="w-4 h-4 stroke-3 rotate-45" />
-                    </div>
-                    Send
+                    {isSending ? (
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                        <div className="w-4 h-4 border-2 border-white rounded-full flex items-center justify-center">
+                            <ArrowUpRight className="w-4 h-4 stroke-3 rotate-45" />
+                        </div>
+                    )}
+                    {isSending ? 'Sending...' : 'Send'}
                 </button>
             </div>
         </div>
