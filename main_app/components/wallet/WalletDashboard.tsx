@@ -41,10 +41,10 @@ const walletOptions = [
   }
 ]
 
-export default function WalletConnectModal({ 
-  isOpen, 
-  onClose, 
-  onSuccess 
+export default function WalletConnectModal({
+  isOpen,
+  onClose,
+  onSuccess
 }: WalletConnectModalProps) {
   const { isConnected, address } = useAccount()
   const { disconnect } = useDisconnect()
@@ -64,13 +64,13 @@ export default function WalletConnectModal({
 
   const handleWalletConnected = async () => {
     if (!address) return
-    
+
     setAuthStep('authenticating')
-    
+
     try {
       // Fetch wallet data first (returns serializable version)
       const serializableWalletInfo = await fetchWalletData()
-      
+
       // Switch to BSC if not already
       if (!isOnBSC) {
         setAuthStep('switching')
@@ -84,7 +84,7 @@ export default function WalletConnectModal({
       const authRes = await fetch('/api/auth/wallet-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           walletAddress: address,
           walletData: serializableWalletInfo,
           action: 'login'
@@ -98,7 +98,7 @@ export default function WalletConnectModal({
         const registerRes = await fetch('/api/auth/wallet-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             walletAddress: address,
             walletData: serializableWalletInfo,
             action: 'register'
@@ -106,11 +106,11 @@ export default function WalletConnectModal({
         })
 
         const registerData = await registerRes.json()
-        
+
         if (registerRes.ok) {
           setAuthStep('success')
           setTimeout(() => {
-            router.push(registerData.user.role === 'ADMIN' ? '/admin' : '/dashboard')
+            router.push(registerData.user.role === 'ADMIN' ? '/admin' : '/flat')
             onClose()
           }, 1500)
         } else {
@@ -120,7 +120,7 @@ export default function WalletConnectModal({
         // Existing user
         setAuthStep('success')
         setTimeout(() => {
-          router.push(authData.user.role === 'ADMIN' ? '/admin' : '/dashboard')
+          router.push(authData.user.role === 'ADMIN' ? '/admin' : '/flat')
           onClose()
         }, 1500)
       }
@@ -236,7 +236,7 @@ export default function WalletConnectModal({
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
-          
+
           <motion.div
             className="fixed inset-0 flex items-center justify-center z-9997 p-4"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -269,19 +269,18 @@ export default function WalletConnectModal({
                   const isLoading = selectedConnector === wallet.id
                   const isComingSoon = wallet.status === 'Coming soon'
                   const isDisabled = isLoading || isComingSoon || !acceptedTerms
-                  
+
                   return (
                     <motion.button
                       key={wallet.id}
                       onClick={() => handleConnect(wallet)}
                       disabled={isDisabled}
-                      className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${
-                        isComingSoon 
+                      className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isComingSoon
                           ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
                           : !acceptedTerms
-                          ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
-                          : 'bg-gray-900/80 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80'
-                      }`}
+                            ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
+                            : 'bg-gray-900/80 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80'
+                        }`}
                       whileHover={!isDisabled ? { scale: 1.02 } : {}}
                       whileTap={!isDisabled ? { scale: 0.98 } : {}}
                     >
@@ -293,14 +292,13 @@ export default function WalletConnectModal({
                           {wallet.name}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center space-x-3">
                         {isLoading ? (
                           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          <span className={`text-sm font-medium ${
-                            isComingSoon ? 'text-gray-500' : 'text-gray-400'
-                          }`}>
+                          <span className={`text-sm font-medium ${isComingSoon ? 'text-gray-500' : 'text-gray-400'
+                            }`}>
                             {wallet.status}
                           </span>
                         )}
@@ -318,11 +316,10 @@ export default function WalletConnectModal({
                 <div className="flex items-start space-x-3">
                   <button
                     onClick={() => setAcceptedTerms(!acceptedTerms)}
-                    className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 ${
-                      acceptedTerms
+                    className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 ${acceptedTerms
                         ? 'bg-[#622DBF] border-[#622DBF]'
                         : 'border-gray-600 hover:border-gray-500'
-                    }`}
+                      }`}
                   >
                     {acceptedTerms && (
                       <motion.div
@@ -381,13 +378,13 @@ export default function WalletConnectModal({
 }
 
 export function WalletDashboard() {
-  const { 
-    address, 
-    walletData, 
-    isLoading, 
+  const {
+    address,
+    walletData,
+    isLoading,
     fetchWalletData,
     refetchBalances,
-    canTrade 
+    canTrade
   } = useWalletManager()
   const [copied, setCopied] = useState(false)
 
@@ -406,7 +403,7 @@ export function WalletDashboard() {
   if (!address) return null
 
   return (
-    <motion.div 
+    <motion.div
       className="bg-[#111010] border border-[#3E3E3E] rounded-xl p-6 max-w-2xl w-full"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -482,8 +479,8 @@ export function WalletDashboard() {
             <TrendingUp className="w-4 h-4 text-yellow-400" />
           </div>
           <div className="text-white font-bold text-lg font-montserrat">
-            {walletData?.balances.bnb ? 
-              `${parseFloat(walletData.balances.bnb.formatted).toFixed(4)}` : 
+            {walletData?.balances.bnb ?
+              `${parseFloat(walletData.balances.bnb.formatted).toFixed(4)}` :
               '0.0000'
             }
           </div>
@@ -499,8 +496,8 @@ export function WalletDashboard() {
             <TrendingDown className="w-4 h-4 text-green-400" />
           </div>
           <div className="text-white font-bold text-lg font-montserrat">
-            {walletData?.balances.usdt ? 
-              `${parseFloat(walletData.balances.usdt.formatted).toFixed(2)}` : 
+            {walletData?.balances.usdt ?
+              `${parseFloat(walletData.balances.usdt.formatted).toFixed(2)}` :
               '0.00'
             }
           </div>
@@ -511,24 +508,21 @@ export function WalletDashboard() {
       </div>
 
       {/* Trading Status */}
-      <div className={`p-4 rounded-lg border ${
-        canTrade 
-          ? 'bg-green-500/10 border-green-500/20' 
+      <div className={`p-4 rounded-lg border ${canTrade
+          ? 'bg-green-500/10 border-green-500/20'
           : 'bg-red-500/10 border-red-500/20'
-      }`}>
+        }`}>
         <div className="flex items-center space-x-3">
-          <div className={`w-3 h-3 rounded-full ${
-            canTrade ? 'bg-green-400' : 'bg-red-400'
-          }`} />
+          <div className={`w-3 h-3 rounded-full ${canTrade ? 'bg-green-400' : 'bg-red-400'
+            }`} />
           <div>
-            <p className={`font-medium font-montserrat ${
-              canTrade ? 'text-green-400' : 'text-red-400'
-            }`}>
+            <p className={`font-medium font-montserrat ${canTrade ? 'text-green-400' : 'text-red-400'
+              }`}>
               {canTrade ? 'Ready to Trade' : 'Insufficient Gas'}
             </p>
             <p className="text-gray-400 text-sm font-montserrat">
-              {canTrade 
-                ? 'Your wallet has sufficient BNB for gas fees' 
+              {canTrade
+                ? 'Your wallet has sufficient BNB for gas fees'
                 : 'Add BNB to your wallet for transaction fees'
               }
             </p>
