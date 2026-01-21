@@ -16,10 +16,10 @@ export default function LandingPage() {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 640);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
@@ -38,14 +38,14 @@ export default function LandingPage() {
   useEffect(() => {
     if (isConnected) {
       console.log('User connected, redirecting to dashboard...');
-      router.push('/dashboard');
+      router.push('/flat');
     }
   }, [isConnected, router]);
 
   const handleTradeNow = () => {
     if (isConnected) {
       // If already connected, redirect to dashboard immediately
-      router.push('/dashboard');
+      router.push('/flat');
     } else {
       // If not connected, open the wallet modal for connection
       setOpen(true);
@@ -54,8 +54,8 @@ export default function LandingPage() {
 
   const iconVariants = {
     hidden: { opacity: 0, scale: 0 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       scale: 1,
       transition: {
         type: "spring" as const,
@@ -77,27 +77,27 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-black text-white relative overflow-hidden">
       {/* Two Purple Background Elements - One left, one right */}
-      <motion.div 
+      <motion.div
         className="absolute top-1/2 left-5/12 transform -translate-y-1/2 -translate-x-102 w-148 h-148 bg-purple-600/20 rounded-full blur-3xl"
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 2, ease: "easeOut" }}
       />
-      <motion.div 
+      <motion.div
         className="absolute top-1/2 left-5/12 transform -translate-y-1/2 translate-x-0 w-148 h-148 bg-purple-700/30 rounded-full blur-3xl"
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 2, delay: 0.3, ease: "easeOut" }}
       />
-     
+
       <div className="relative z-10 flex flex-col items-center min-h-screen px-8 py-4">
-        <motion.div 
+        <motion.div
           className="text-center max-w-4xl mx-auto mb-6"
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
-          <motion.h1 
+          <motion.h1
             className="text-3xl md:text-4xl lg:text-6xl font-bold leading-tight"
             initial={{ opacity: 0, y: -30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -105,13 +105,13 @@ export default function LandingPage() {
           >
             Unlock India's Easiest
           </motion.h1>
-          <motion.div 
+          <motion.div
             className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            <motion.span 
+            <motion.span
               className="text-[#187C58]"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -120,7 +120,7 @@ export default function LandingPage() {
               USDT
             </motion.span>
             <span className="text-white"> - </span>
-            <motion.span 
+            <motion.span
               className="text-lime-400"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -132,14 +132,14 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Subtitle */}
-          <motion.p 
+          <motion.p
             className="pt-2 text-md md:text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 1 }}
           >
             Trade USDT easily in India. Use UPI and Cash Deposit
-            
+
             with our secure P2P platform.
           </motion.p>
         </motion.div>
@@ -147,7 +147,7 @@ export default function LandingPage() {
         {/* Icons and Central SVG Container */}
         <div className="relative w-full max-w-3xl mx-auto mb-12">
           {/* Top Left Icon */}
-          <motion.div 
+          <motion.div
             className="absolute top-8 left-20 md:w-16 md:h-16 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -155,15 +155,15 @@ export default function LandingPage() {
             transition={{ delay: 1.2 }}
             whileHover={{ scale: 1.1, rotate: 5 }}
           >
-            <motion.img 
-              src="/meta-mask.svg" 
+            <motion.img
+              src="/meta-mask.svg"
               alt="meta-mask"
               animate={floatingAnimation}
             />
           </motion.div>
 
           {/* Top Right Icon */}
-          <motion.div 
+          <motion.div
             className="absolute top-8 right-20 md:w-16 md:h-16 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -171,8 +171,8 @@ export default function LandingPage() {
             transition={{ delay: 1.4 }}
             whileHover={{ scale: 1.1, rotate: -5 }}
           >
-            <motion.img 
-              src="/google.svg" 
+            <motion.img
+              src="/google.svg"
               alt=""
               animate={{
                 ...floatingAnimation,
@@ -182,7 +182,7 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Middle Left Icon */}
-          <motion.div 
+          <motion.div
             className="absolute top-1/2 md:left-8 transform -translate-y-1/2 md:w-16 md:h-16 h-8 w-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -190,8 +190,8 @@ export default function LandingPage() {
             transition={{ delay: 1.6 }}
             whileHover={{ scale: 1.1, rotate: 10 }}
           >
-            <motion.img 
-              src="/wallet.svg" 
+            <motion.img
+              src="/wallet.svg"
               alt=""
               animate={{
                 ...floatingAnimation,
@@ -201,7 +201,7 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Middle Right Icon */}
-          <motion.div 
+          <motion.div
             className="absolute top-1/2 right-8 transform -translate-y-1/2 md:w-16 md:h-16 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -209,8 +209,8 @@ export default function LandingPage() {
             transition={{ delay: 1.8 }}
             whileHover={{ scale: 1.1, rotate: -10 }}
           >
-            <motion.img 
-              src="/bank.svg" 
+            <motion.img
+              src="/bank.svg"
               alt=""
               animate={{
                 ...floatingAnimation,
@@ -220,7 +220,7 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Bottom Left Icon */}
-          <motion.div 
+          <motion.div
             className="absolute bottom-8 left-20 md:w-16 md:h-16 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -228,8 +228,8 @@ export default function LandingPage() {
             transition={{ delay: 2 }}
             whileHover={{ scale: 1.1, rotate: 15 }}
           >
-            <motion.img 
-              src="/bsc-wallet.svg" 
+            <motion.img
+              src="/bsc-wallet.svg"
               alt=""
               animate={{
                 ...floatingAnimation,
@@ -239,7 +239,7 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Bottom Right Icon */}
-          <motion.div 
+          <motion.div
             className="absolute bottom-8 right-20 md:w-16 md:h-16 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
             variants={iconVariants}
             initial="hidden"
@@ -247,8 +247,8 @@ export default function LandingPage() {
             transition={{ delay: 2.2 }}
             whileHover={{ scale: 1.1, rotate: -15 }}
           >
-            <motion.img 
-              src="/phone-pay.svg" 
+            <motion.img
+              src="/phone-pay.svg"
               alt=""
               animate={{
                 ...floatingAnimation,
@@ -258,20 +258,20 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Center Image */}
-          <motion.div 
+          <motion.div
             className="flex justify-center items-center h-96"
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1, delay: 0.8, type: "spring", stiffness: 260, damping: 20 }}
           >
-            <motion.div 
+            <motion.div
               className="md:w-96 md:h-96 h-64 w-64 flex items-center justify-center"
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.3 }}
             >
-              <motion.img 
-                src="/hero-landing.svg" 
-                alt="" 
+              <motion.img
+                src="/hero-landing.svg"
+                alt=""
                 className="w-full h-full object-contain"
                 animate={{
                   y: [-5, 5, -5],
@@ -294,9 +294,9 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 2.4 }}
-          whileHover={{ 
-            scale: 1.05, 
-            boxShadow: "0 20px 40px rgba(98, 45, 191, 0.4)" 
+          whileHover={{
+            scale: 1.05,
+            boxShadow: "0 20px 40px rgba(98, 45, 191, 0.4)"
           }}
           whileTap={{ scale: 0.95 }}
         >
