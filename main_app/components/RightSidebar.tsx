@@ -15,14 +15,17 @@ import {
     CheckCircle2,
     Info,
     Wallet,
-    ChevronDown
+    ChevronDown,
+    LogOut
 } from 'lucide-react'
 import { FC, useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import Image from 'next/image'
-import { usePublicClient, useSmartAccount } from '@particle-network/connectkit'
+import { usePublicClient, useSmartAccount, useDisconnect, useWallets } from '@particle-network/connectkit'
 import { formatUnits, Address, parseAbiItem, parseUnits, erc20Abi } from 'viem'
 import { ethers } from 'ethers'
+import { useRouter } from 'next/navigation'
+import { retryWithRPCFailover } from '@/lib/rpcManager'
 
 const CONTRACTS = {
     USDT: {
@@ -34,13 +37,14 @@ interface RightSidebarProps {
     isOpen: boolean
     onClose: () => void
     address: string | undefined
+    smartWalletAddress?: string | null
     userBalances: {
         usdt: string
         inr: string
     } | null
 }
 
-const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBalances }) => {
+const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWalletAddress, userBalances }) => {
     const [activeTab, setActiveTab] = useState<'All' | 'Deposit' | 'Withdraw'>('Deposit')
     const [currentView, setCurrentView] = useState<'Main' | 'Send' | 'Receive'>('Main')
     const [copyStatus, setCopyStatus] = useState(false)
@@ -50,12 +54,44 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     const [txHash, setTxHash] = useState<string | null>(null)
     const [sendError, setSendError] = useState<string | null>(null)
 
+    // CRITICAL: ONLY use smart wallet address - NO fallback to EOA
+    // If smartWalletAddress is null, we wait for it to be computed
+    const displayAddress = smartWalletAddress
+    const isSmartWalletDeployed = !!smartWalletAddress
 
     const [sellRate, setSellRate] = useState<number>(0)
     const [historyData, setHistoryData] = useState<any[]>([])
     const [isHistoryLoading, setIsHistoryLoading] = useState(false)
+    const [showDisconnect, setShowDisconnect] = useState(false)
     const publicClient = usePublicClient()
     const smartAccount = useSmartAccount()
+    const { disconnect } = useDisconnect()
+    const [primaryWallet] = useWallets()
+    const router = useRouter()
+
+    const handleLogout = async () => {
+        try {
+            disconnect()
+            // Clear storage
+            if (typeof window !== 'undefined') {
+                sessionStorage.clear()
+                const keysToRemove = Object.keys(localStorage).filter(key =>
+                    key.includes('wagmi') ||
+                    key.includes('wallet') ||
+                    key.includes('user') ||
+                    key.includes('auth')
+                )
+                keysToRemove.forEach(key => localStorage.removeItem(key))
+            }
+            onClose()
+            router.push('/')
+            setTimeout(() => window.location.reload(), 100)
+        } catch (error) {
+            console.error('Logout error:', error)
+            router.push('/')
+            window.location.reload()
+        }
+    }
 
     const sendGaslessUSDT = async (
         recipientAddress: string,
@@ -162,7 +198,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
             setRecipientAddress('')
             // Refetch after a short delay
             setTimeout(() => {
-                if (address) fetchOnChainHistory(address)
+                if (displayAddress) fetchOnChainHistory(displayAddress)
             }, 5000)
         } catch (err: any) {
             setSendError(err.message)
@@ -172,74 +208,33 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     }
 
     const fetchOnChainHistory = async (userAddress: string) => {
-        if (!publicClient || !userAddress) return
+        if (!userAddress) return
 
+        console.log('🔍 Fetching transaction history for:', userAddress)
         setIsHistoryLoading(true)
+
         try {
-            const usdtAddress: Address = '0x55d398326f99059fF775485246999027B3197955'
-
-            // Fetch transfer logs (incoming and outgoing)
-            // We fetch both to/from and merge them
-            const [incomingLogs, outgoingLogs] = await Promise.all([
-                publicClient.getLogs({
-                    address: usdtAddress,
-                    event: parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)'),
-                    args: { to: userAddress as Address },
-                    fromBlock: 'earliest', // Note: Some RPCs might require a specific block number
-                    toBlock: 'latest'
-                }),
-                publicClient.getLogs({
-                    address: usdtAddress,
-                    event: parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)'),
-                    args: { from: userAddress as Address },
-                    fromBlock: 'earliest',
-                    toBlock: 'latest'
-                })
-            ])
-
-            const allLogs = [...incomingLogs, ...outgoingLogs].sort((a, b) =>
-                Number((b.blockNumber ?? 0) - (a.blockNumber ?? 0))
-            ).slice(0, 100) // Top 15 transactions
-
-            // Fetch block timestamps for the logs (to get dates)
-            const transactions = await Promise.all(allLogs.map(async (log: any) => {
-                const isDeposit = log.args.to.toLowerCase() === userAddress.toLowerCase()
-                let date = 'Recent'
-
-                try {
-                    const block = await publicClient.getBlock({ blockNumber: log.blockNumber })
-                    const timestamp = Number(block.timestamp) * 1000
-                    date = new Date(timestamp).toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: '2-digit'
-                    })
-                } catch (e) {
-                    console.error('Error fetching block timestamp:', e)
-                }
-
-                return {
-                    type: isDeposit ? 'Deposit' : 'Withdraw',
-                    amount: `${formatUnits(log.args.value, 18)} USDT`,
-                    date: date,
-                    hash: log.transactionHash,
-                    blockNumber: log.blockNumber
-                }
-            }))
-
+            // Use Alchemy's optimized getAssetTransfers API
+            const { fetchTransactionHistoryAlchemy } = await import('@/lib/alchemyApi')
+            const transactions = await fetchTransactionHistoryAlchemy(userAddress)
             setHistoryData(transactions)
         } catch (err) {
-            console.error('Failed to fetch on-chain history:', err)
+            console.error('Failed to fetch transaction history:', err)
+            setHistoryData([])
         } finally {
             setIsHistoryLoading(false)
         }
     }
 
     useEffect(() => {
-        if (isOpen && address) {
-            fetchOnChainHistory(address)
+        // Only fetch history when we have a smart wallet address
+        if (isOpen && displayAddress) {
+            console.log('🔄 Sidebar opened, fetching history for smart wallet:', displayAddress)
+            fetchOnChainHistory(displayAddress)
+        } else if (isOpen && !displayAddress) {
+            console.log('⏳ Waiting for smart wallet address to be computed...')
         }
-    }, [isOpen, address])
+    }, [isOpen, displayAddress])
 
     useEffect(() => {
         const fetchRates = async () => {
@@ -285,14 +280,34 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     const renderHeader = () => {
         if (currentView === 'Main') {
             return (
-                <div className="flex items-center justify-end p-6 gap-2">
-                    <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full">
-                        <CircleUser className="w-5 h-5 text-gray-400" />
-                        <span className="text-white text-sm font-medium">{formatAddress(address || "0x0000...0000")}</span>
+                <div className="relative flex flex-col items-end p-6 gap-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowDisconnect(!showDisconnect)}
+                            className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
+                        >
+                            <Image src="/srd_gen.svg" alt="User" width={24} height={24} />
+                            <span className="text-white text-sm font-medium">{formatAddress(displayAddress || "0x0000...0000")}</span>
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-gray-400" />
+                        </button>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-400" />
-                    </button>
+
+                    <AnimatePresence>
+                        {showDisconnect && (
+                            <motion.button
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                onClick={handleLogout}
+                                className="absolute top-[75px] right-18 flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-xl transition-all shadow-xl z-50 font-bold"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                Disconnect
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
                 </div>
             )
         }
@@ -312,7 +327,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     }
 
     const renderReceiveView = () => (
-        <div className="flex-1 top-2 px-6 flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 px-6 flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
             {/* Warning Box */}
             <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
                 <div className="mt-1">
@@ -320,7 +335,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                         <span className="text-black text-xs font-bold font-serif">!</span>
                     </div>
                 </div>
-                <p className="text-[#fffff] text-sm font-medium leading-tight">
+                <p className="text-white text-sm font-medium leading-tight">
                     Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
                 </p>
             </div>
@@ -337,18 +352,20 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
 
             {/* QR Code */}
             <div className="p-6 bg-white rounded-3xl shadow-2xl">
-                <QRCodeSVG value={address || ''} size={200} level="H" />
+                <QRCodeSVG value={displayAddress || ''} size={200} level="H" />
             </div>
 
             {/* Address Box */}
             <div className="w-full space-y-2">
-                <p className="text-gray-500 text-sm font-medium text-center">Your BSC Wallet Address</p>
+                <p className="text-gray-500 text-sm font-medium text-center">
+                    Your {isSmartWalletDeployed ? 'Smart Wallet' : 'Wallet'} Address
+                </p>
                 <div
-                    onClick={() => copyToClipboard(address || '')}
+                    onClick={() => copyToClipboard(displayAddress || '')}
                     className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/10 transition-colors group"
                 >
                     <span className="text-white font-mono text-sm break-all flex-1 mr-4">
-                        {address}
+                        {displayAddress}
                     </span>
                     <div className="shrink-0">
                         {copyStatus ? (
@@ -358,6 +375,14 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                         )}
                     </div>
                 </div>
+                {!isSmartWalletDeployed && displayAddress && (
+                    <div className="w-full p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-2">
+                        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                        <p className="text-blue-400 text-xs leading-tight">
+                            This is your smart wallet address. It will be activated on your first transaction.
+                        </p>
+                    </div>
+                )}
             </div>
 
 
@@ -365,7 +390,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
     )
 
     const renderSendView = () => (
-        <div className="flex-1 top-2 px-6 flex flex-col space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 px-6 flex flex-col space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
             {/* Warning Box */}
             <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
                 <div className="mt-1 shrink-0">
@@ -395,16 +420,18 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                 </div>
             )}
 
-            {sendError && (
-                <div className="w-full p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
-                    <div className="shrink-0 mt-0.5">
-                        <Info className="w-5 h-5 text-red-500" />
+            {
+                sendError && (
+                    <div className="w-full p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
+                        <div className="shrink-0 mt-0.5">
+                            <Info className="w-5 h-5 text-red-500" />
+                        </div>
+                        <p className="text-red-500 text-sm font-medium leading-tight">
+                            {sendError}
+                        </p>
                     </div>
-                    <p className="text-red-500 text-sm font-medium leading-tight">
-                        {sendError}
-                    </p>
-                </div>
-            )}
+                )
+            }
 
             {/* Address Input */}
             <div className="space-y-3">
@@ -434,7 +461,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                 <label className="text-white font-bold block">Destination network</label>
                 <button className="flex items-center gap-3 bg-white/5 border border-white/20 rounded-2xl py-2 px-2 hover:bg-white/15 transition-colors">
                     <div className="w-5 h-5  rounded-full flex items-center justify-center overflow-hidden">
-                        <Image src="/bsc-wallet.svg" alt="BNB" width={18} height={18} />
+                        <Image src="/bsc.svg" alt="BNB" width={18} height={18} />
                     </div>
                     <span className="text-white font-medium">BNB Smart chain</span>
                     <ChevronDown className="w-4 h-4 text-gray-500 ml-auto" />
@@ -478,13 +505,13 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                         <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                         <div className="w-4 h-4 border-2 border-white rounded-full flex items-center justify-center">
-                            <ArrowUpRight className="w-4 h-4 stroke-3 rotate-45" />
+                            <Image src="/send.svg" alt="Send" width={24} height={24} />
                         </div>
                     )}
                     {isSending ? 'Sending...' : 'Send'}
                 </button>
             </div>
-        </div>
+        </div >
     )
 
 
@@ -502,7 +529,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-100"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101]"
                     />
 
                     {/* Sidebar */}
@@ -511,7 +538,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-black shadow-2xl z-101 flex flex-col overflow-hidden"
+                        className="fixed inset-y-0 right-0 w-full sm:w-[480px] h-[100dvh] bg-black shadow-2xl z-[102] flex flex-col overflow-hidden"
                     >
                         {/* Header */}
                         {renderHeader()}
@@ -522,11 +549,11 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                                 <div className="relative overflow-hidden aspect-[1.8/1] rounded-3xl bg-[#111] border border-white/5 p-8 flex flex-col justify-center">
                                     {/* Background Watermark/Logo */}
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
-                                        <Image src="/srd_final.svg" alt="" width={160} height={160} className="grayscale brightness-200" />
+                                        <Image src="/srd.jpg" alt="" width={160} height={160} className="grayscale brightness-200" />
                                     </div>
 
                                     <div className="relative z-10 flex flex-col gap-1">
-                                        <h3 className="text-4xl font-bold text-white tracking-tight">
+                                        <h3 className="text-3xl font-bold text-white tracking-tight">
                                             {parseFloat(userBalances?.usdt || "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT
                                         </h3>
                                         <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
@@ -542,7 +569,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                                         className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-2xl font-bold text-lg transition-all active:scale-95"
                                     >
                                         <div className="w-6 h-6 border-2 border-white rounded-full flex items-center justify-center">
-                                            <ArrowDownLeft className="w-4 h-4 stroke-3" />
+                                            <Image src="/rec.svg" alt="Receive" width={24} height={24} />
                                         </div>
                                         Receive
                                     </button>
@@ -551,7 +578,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                                         className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-2xl font-bold text-lg transition-all active:scale-95"
                                     >
                                         <div className="w-6 h-6 border-2 border-white rounded-full flex items-center justify-center">
-                                            <ArrowUpRight className="w-4 h-4 stroke-3" />
+                                            <Image src="/send.svg" alt="Send" width={24} height={24} />
                                         </div>
                                         Send
                                     </button>
@@ -577,9 +604,9 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, userBal
                                             <button
                                                 key={tab}
                                                 onClick={() => setActiveTab(tab)}
-                                                className={`flex-1 py-2 px-6 text-sm font-bold   border border-white transition-all ${activeTab === tab
+                                                className={`flex-1 py-2 px-6 text-sm font-bold  transition-all ${activeTab === tab
                                                     ? 'bg-[#6320EE] text-white shadow-lg'
-                                                    : 'text-gray-500 hover:text-white'
+                                                    : 'text-gray-100 hover:text-white'
                                                     }`}
                                             >
                                                 {tab}
