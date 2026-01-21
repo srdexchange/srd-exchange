@@ -10,6 +10,7 @@ import { parseUnits, formatUnits, Address } from "viem";
 import type { Chain as ViemChain } from "viem";
 import { bsc } from "@particle-network/connectkit/chains";
 import { PublicClient } from "viem";
+import { retryWithRPCFailover, rpcManager } from "@/lib/rpcManager";
 
 // Add Gas Station import
 const GAS_STATION_ENABLED =
@@ -254,71 +255,121 @@ export function useWalletManager() {
 
   // Fetch BNB balance
   const refetchBnb = async () => {
-    if (!address || !publicClient) return;
+    if (!address) return;
+
     try {
-      const balance = await (publicClient as any).getBalance({ address: address as Address });
-      setBnbBalance(balance);
+      const balance = await retryWithRPCFailover(async (client) => {
+        return await client.getBalance({ address: address as Address });
+      });
+
+      if (balance !== null) {
+        setBnbBalance(balance);
+      }
     } catch (error) {
       console.error("Failed to fetch BNB balance:", error);
     }
   };
 
+
   // Fetch USDT balance and decimals for EOA
   const refetchUsdt = async () => {
-    if (!address || !publicClient || chainId !== bsc.id || !('readContract' in publicClient)) return;
-    try {
-      const balance = await (publicClient as any).readContract({
-        address: CONTRACTS.USDT[56],
-        abi: USDT_ABI,
-        functionName: "balanceOf",
-        args: [address],
-      });
-      setUsdtBalance(balance as bigint);
+    if (!address || chainId !== bsc.id) return;
 
-      const decimals = await (publicClient as any).readContract({
-        address: CONTRACTS.USDT[56],
-        abi: USDT_ABI,
-        functionName: "decimals",
+    try {
+      const balance = await retryWithRPCFailover(async (client) => {
+        return await client.readContract({
+          address: CONTRACTS.USDT[56],
+          abi: USDT_ABI,
+          functionName: "balanceOf",
+          args: [address as Address],
+        });
       });
-      setUsdtDecimals(Number(decimals));
+
+      if (balance !== null) {
+        setUsdtBalance(balance as bigint);
+      }
+
+      const decimals = await retryWithRPCFailover(async (client) => {
+        return await client.readContract({
+          address: CONTRACTS.USDT[56],
+          abi: USDT_ABI,
+          functionName: "decimals",
+        });
+      });
+
+      if (decimals !== null) {
+        setUsdtDecimals(Number(decimals));
+      }
     } catch (error) {
       console.error("Failed to fetch USDT balance:", error);
     }
   };
 
+  // Fetch smart account address early (separate from balance fetching)
+  // This ensures the address is available for new users even before first transaction
+  useEffect(() => {
+    const fetchSmartAccountAddress = async () => {
+      if (!smartAccount) {
+        console.log("⏳ Smart account not yet initialized");
+        return;
+      }
+
+      try {
+        const smartAddress = await smartAccount.getAddress();
+        setSmartWalletAddress(smartAddress);
+        console.log("✅ Smart Account Address computed:", smartAddress);
+      } catch (error) {
+        console.error("❌ Failed to get smart account address:", error);
+      }
+    };
+
+    fetchSmartAccountAddress();
+  }, [smartAccount]);
+
   // Fetch smart wallet USDT balance
   const refetchSmartWalletUsdt = async () => {
-    if (!smartAccount || !publicClient || chainId !== bsc.id || !('readContract' in publicClient)) return;
+    if (!smartAccount || chainId !== bsc.id) return;
+
     try {
-      const smartAddress = await smartAccount.getAddress();
-      setSmartWalletAddress(smartAddress);
+      // Get smart account address (should already be set by the useEffect above)
+      const smartAddress = smartWalletAddress || await smartAccount.getAddress();
 
-      const balance = await (publicClient as any).readContract({
-        address: CONTRACTS.USDT[56],
-        abi: USDT_ABI,
-        functionName: "balanceOf",
-        args: [smartAddress as Address],
-      });
-      setSmartWalletUsdtBalance(balance as bigint);
+      if (!smartWalletAddress && smartAddress) {
+        setSmartWalletAddress(smartAddress);
+      }
 
-      console.log("🔍 Smart Wallet USDT Balance:", {
-        smartAddress,
-        rawBalance: balance.toString(),
-        formatted: formatUnits(balance, usdtDecimals || 18)
+      const balance = await retryWithRPCFailover(async (client) => {
+        return await client.readContract({
+          address: CONTRACTS.USDT[56],
+          abi: USDT_ABI,
+          functionName: "balanceOf",
+          args: [smartAddress as Address],
+        });
       });
+
+      if (balance !== null) {
+        setSmartWalletUsdtBalance(balance as bigint);
+
+        console.log("🔍 Smart Wallet USDT Balance:", {
+          smartAddress,
+          rawBalance: balance.toString(),
+          formatted: formatUnits(balance, usdtDecimals || 18)
+        });
+      }
     } catch (error) {
       console.error("Failed to fetch smart wallet USDT balance:", error);
     }
   };
 
   // Fetch balances when address or chainId changes
+  // NOTE: Do NOT include smartWalletAddress or usdtDecimals in deps - they are set inside the effects
   useEffect(() => {
-    if (address && chainId === bsc.id && publicClient) {
+    if (address && chainId === bsc.id) {
       refetchBnb();
       refetchUsdt();
       refetchSmartWalletUsdt();
     }
-  }, [address, chainId, publicClient, smartAccount]);
+  }, [address, smartAccount]);
 
   // Add debugging for USDT balance
   useEffect(() => {
@@ -448,8 +499,8 @@ export function useWalletManager() {
 
       // Format smart wallet USDT balance
       let formattedSmartWalletUsdtBalance = "0";
-      if (smartWalletUsdtBalance && usdtDecimals) {
-        formattedSmartWalletUsdtBalance = formatUnits(smartWalletUsdtBalance, usdtDecimals);
+      if (smartWalletUsdtBalance !== null) {
+        formattedSmartWalletUsdtBalance = formatUnits(smartWalletUsdtBalance, usdtDecimals || 18);
       }
 
       const walletInfo = {
@@ -1092,7 +1143,7 @@ export function useWalletManager() {
         needsMainnet: true,
       });
     }
-  }, [isConnected, address, chainId, bnbBalance, usdtBalance]);
+  }, [isConnected, address, chainId, bnbBalance, usdtBalance, smartWalletUsdtBalance, usdtDecimals, smartWalletAddress]);
 
   const refetchBalances = async () => {
     if (chainId === bsc.id) {
