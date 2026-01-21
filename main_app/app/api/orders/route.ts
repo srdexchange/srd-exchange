@@ -171,6 +171,28 @@ export async function POST(request: NextRequest) {
           profileCompleted: profileCompleted
         }
       })
+    } else {
+      // User exists - Check if we need to "heal" missing UPI ID (for retroactive fix)
+      if (!user.upiId && linkedEoaAddress) {
+        console.log('🔄 Existing user missing UPI ID, attempting to link with EOA:', linkedEoaAddress);
+
+        const linkedUser = await prisma.user.findUnique({
+          where: { walletAddress: linkedEoaAddress.toLowerCase() }
+        });
+
+        if (linkedUser && linkedUser.upiId) {
+          console.log('✅ Found linked user with UPI ID, updating existing profile:', linkedUser.upiId);
+
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              upiId: linkedUser.upiId,
+              profileCompleted: true
+            }
+          });
+          console.log('✨ User profile updated with UPI ID');
+        }
+      }
     }
 
     console.log('👤 User found/created:', user.id);
