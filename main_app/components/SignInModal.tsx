@@ -31,7 +31,7 @@ const SignInModal: FC<Props> = ({ onClose }) => {
       } else if (role === 'ADMIN') {
         window.location.href = '/admin'
       } else {
-        window.location.href = '/dashboard'
+        window.location.href = '/flat'
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred')
@@ -49,11 +49,11 @@ const SignInModal: FC<Props> = ({ onClose }) => {
         >
           ✕
         </button>
-        
+
         <h2 className="text-2xl font-semibold mb-6">Sign In</h2>
-        
+
         <WalletConnect />
-        
+
         {isConnected && (
           <button
             onClick={handleContinue}
@@ -63,7 +63,7 @@ const SignInModal: FC<Props> = ({ onClose }) => {
             {loading ? 'Processing...' : 'Continue'}
           </button>
         )}
-        
+
         {error && <p className="mt-4 text-red-500 text-sm">{error}</p>}
       </div>
     </div>
