@@ -15,9 +15,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { walletAddress: walletAddress.toLowerCase() },
+    // Check if user exists (by walletAddress OR smartWalletAddress)
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { walletAddress: walletAddress.toLowerCase() },
+          { smartWalletAddress: walletAddress.toLowerCase() }
+        ]
+      },
       include: { bankDetails: true }
     });
 
@@ -30,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     // Update existing user - Profile is completed with just UPI ID
     const user = await prisma.user.update({
-      where: { walletAddress: walletAddress.toLowerCase() },
+      where: { id: existingUser.id },
       data: {
         upiId: upiId.trim(),
         profileCompleted: true, // Always mark as completed when UPI ID is saved
@@ -82,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch updated user with bank details to ensure we have latest data
     const updatedUser = await prisma.user.findUnique({
-      where: { walletAddress: walletAddress.toLowerCase() },
+      where: { id: user.id },
       include: { bankDetails: true }
     });
 
