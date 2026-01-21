@@ -13,14 +13,14 @@ export default function TermsAndConditionsPage() {
       // Store acceptance in localStorage
       localStorage.setItem(`terms_accepted_${address}`, 'true')
       // Redirect to dashboard
-      router.push('/dashboard')
+      router.push('/flat')
     }
   }
 
   return (
     <div className="min-h-screen bg-black text-white">
       <SimpleNav />
-      
+
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="text-center mb-12">
@@ -39,7 +39,7 @@ export default function TermsAndConditionsPage() {
 
         {/* Content */}
         <div className="space-y-8 text-gray-300">
-          
+
           {/* Introduction */}
           <section className="bg-[#111111] border border-gray-700 rounded-lg p-6">
             <p className="leading-relaxed font-montserrat">
@@ -181,7 +181,7 @@ export default function TermsAndConditionsPage() {
           <section className="bg-[#111111] border border-gray-700 rounded-lg p-6">
             <h2 className="text-2xl font-bold text-white mb-4 font-montserrat">🔒 Privacy Policy</h2>
             <p className="mb-4 font-montserrat">We respect your privacy and are committed to protecting your personal data in compliance with the Digital Personal Data Protection Act, 2023 (DPDP Act) and other Indian IT laws.</p>
-            
+
             <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-semibold text-white mb-2 font-montserrat">1. Data We Collect</h3>
@@ -271,10 +271,10 @@ export default function TermsAndConditionsPage() {
         {/* Footer */}
         <div className="text-center mt-12 pt-8 border-t border-gray-700">
           <p className="text-gray-500 font-montserrat">
-            Last updated: {new Date().toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            Last updated: {new Date().toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
             })}
           </p>
         </div>
