@@ -353,6 +353,7 @@ export default function BuySellSection() {
           paymentMethod: paymentMethod.toUpperCase(),
           blockchainOrderId: null,
           status: "PENDING",
+          linkedEoaAddress: eoaAddress, // Link Smart Wallet to EOA user
         };
 
         console.log("📋 Buy order payload:", buyOrderPayload);
@@ -482,6 +483,7 @@ export default function BuySellSection() {
         blockchainOrderId: null,
         status: 'PENDING_ADMIN_PAYMENT',
         gasStationTxHash: txHash, // Store the gasless transfer hash
+        linkedEoaAddress: eoaAddress, // Link Smart Wallet to EOA user
       };
 
       const dbResponse = await fetch('/api/orders', {
@@ -950,8 +952,8 @@ export default function BuySellSection() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${activeTab === "buy"
-                  ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
-                  : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
+                ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
+                : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
                 }`}
             >
               Buy
@@ -961,8 +963,8 @@ export default function BuySellSection() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className={`flex-1 py-3 sm:py-4 px-6 sm:px-12 rounded-md font-semibold text-base sm:text-lg transition-all ${activeTab === "sell"
-                  ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
-                  : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
+                ? "bg-[#622DBF] text-white shadow-lg shadow-purple-600/25"
+                : "bg-[#101010] text-white border border-[#3E3E3E] hover:bg-gray-700/50"
                 }`}
             >
               Sell
@@ -990,8 +992,8 @@ export default function BuySellSection() {
                   >
                     <motion.div
                       className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all ${paymentMethod === "upi"
-                          ? "bg-[#622DBF] border-[#622DBF]"
-                          : "bg-[#1E1C1C] border-[#3E3E3E]"
+                        ? "bg-[#622DBF] border-[#622DBF]"
+                        : "bg-[#1E1C1C] border-[#3E3E3E]"
                         }`}
                       onClick={() => setPaymentMethod("upi")}
                       whileTap={{ scale: 0.9 }}
@@ -1036,8 +1038,8 @@ export default function BuySellSection() {
                   >
                     <motion.div
                       className={`w-5 h-5 border-2 rounded-sm flex items-center justify-center transition-all ${paymentMethod === "cdm"
-                          ? "bg-[#622DBF] border-[#622DBF]"
-                          : "bg-[#1E1C1C] border-[#3E3E3E]"
+                        ? "bg-[#622DBF] border-[#622DBF]"
+                        : "bg-[#1E1C1C] border-[#3E3E3E]"
                         }`}
                       onClick={() => setPaymentMethod("cdm")}
                       whileTap={{ scale: 0.9 }}

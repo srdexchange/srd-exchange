@@ -87,7 +87,8 @@ export async function POST(request: NextRequest) {
       sellRate,
       paymentMethod,
       blockchainOrderId,
-      status
+      status,
+      linkedEoaAddress // NEW: Accept linked EOA address to associate with existing user profile
     } = body
 
     // Enhanced validation
@@ -127,6 +128,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Validation passed, creating order:', {
       walletAddress,
+      linkedEoaAddress,
       orderType,
       amount: `₹${amount}`,
       usdtAmount: usdtAmount ? `${usdtAmount} USDT` : 'N/A',
@@ -143,10 +145,30 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       console.log('👤 Creating new user for wallet:', walletAddress);
+
+      // Check if we have a linked EOA address to copy profile data from
+      let upiIdToCopy = null;
+      let profileCompleted = false;
+
+      if (linkedEoaAddress) {
+        console.log('🔗 Checking linked EOA user:', linkedEoaAddress);
+        const linkedUser = await prisma.user.findUnique({
+          where: { walletAddress: linkedEoaAddress.toLowerCase() }
+        });
+
+        if (linkedUser && linkedUser.upiId) {
+          console.log('✅ Found linked user with UPI ID:', linkedUser.upiId);
+          upiIdToCopy = linkedUser.upiId;
+          profileCompleted = true; // Assume profile completed if we have UPI ID
+        }
+      }
+
       user = await prisma.user.create({
         data: {
           walletAddress: walletAddress.toLowerCase(),
-          role: 'USER'
+          role: 'USER',
+          upiId: upiIdToCopy,
+          profileCompleted: profileCompleted
         }
       })
     }
