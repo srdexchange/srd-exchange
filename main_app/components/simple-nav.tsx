@@ -40,7 +40,7 @@ export default function SimpleNav() {
             className={`w-12 h-8 rounded-2xl flex items-center justify-center border transition
       ${bnbEnabled
                 ? "bg-yellow-400/20 border-yellow-400"
-                : "bg-white/10 border-white/20 hover:bg-white/20"}
+                :"bg-yellow-400/20 border-yellow-400"}
     `}
           >
             <Image

@@ -25,7 +25,7 @@ const BottomNavbar = () => {
         {
             label: 'Flat',
             icon: <Image src="/fiat.svg" alt="Flat" width={20} height={20} className="w-5 h-5" />,
-            href: '/flat',
+            href: '/fiat',
         },
         {
             label: 'Wallet',
@@ -52,14 +52,14 @@ const BottomNavbar = () => {
                             whileTap={{ scale: 0.95 }}
                             onClick={item.isAction ? openSidebar : undefined}
                             className={`relative flex flex-col items-center gap-1 px-2 py-1.5 md:px-4 md:py-2 rounded-xl transition-all duration-300 cursor-pointer ${isActive
-                                ? 'text-white'
+                                ? 'text-[#6320EE]'
                                 : 'text-gray-500 hover:text-gray-300'
                                 } ${item.label === 'Wallet' ? 'sm:hidden' : ''}`}
                         >
                             <div className={`transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>
                                 {item.icon}
                             </div>
-                            <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
+                            <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-[#6320EE]' : ''}`}>
                                 {item.label}
                             </span>
 

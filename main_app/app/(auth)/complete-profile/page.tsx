@@ -28,7 +28,7 @@ interface BankDetails {
 export default function CompleteProfilePage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
-  
+
   const [upiId, setUpiId] = useState("");
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [bankDetails, setBankDetails] = useState<BankDetails>({
@@ -38,7 +38,7 @@ export default function CompleteProfilePage() {
     branchName: "",
     accountHolderName: "",
   });
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,35 +52,35 @@ export default function CompleteProfilePage() {
   const validateUPI = (upi: string) => {
     // UPI format: username@bank (e.g., 9876543210@paytm, user@okaxis, name123@upi)
     const upiRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/;
-    
+
     if (!upi.trim()) {
       return { isValid: false, isVerified: false };
     }
-    
+
     if (upi.length < 3) {
-      return { 
-        isValid: false, 
-        isVerified: false, 
-        message: "UPI ID is too short" 
+      return {
+        isValid: false,
+        isVerified: false,
+        message: "UPI ID is too short"
       };
     }
-    
+
     if (!upi.includes('@')) {
-      return { 
-        isValid: false, 
-        isVerified: false, 
-        message: "UPI ID must contain @ symbol" 
+      return {
+        isValid: false,
+        isVerified: false,
+        message: "UPI ID must contain @ symbol"
       };
     }
-    
+
     if (!upiRegex.test(upi)) {
-      return { 
-        isValid: false, 
-        isVerified: false, 
-        message: "Your UPI Id is not valid please check again" 
+      return {
+        isValid: false,
+        isVerified: false,
+        message: "Your UPI Id is not valid please check again"
       };
     }
-    
+
     // Valid UPI format
     return { isValid: true, isVerified: true };
   };
@@ -90,7 +90,7 @@ export default function CompleteProfilePage() {
     setUpiId(value);
     const validation = validateUPI(value);
     setUpiValidation(validation);
-    
+
     // Clear general error when UPI becomes valid
     if (validation.isValid && error === "UPI ID is required") {
       setError(null);
@@ -130,7 +130,7 @@ export default function CompleteProfilePage() {
 
     if (showBankDetails && isBankDetailsComplete()) {
       const { accountNumber, confirmAccountNumber } = bankDetails;
-      
+
       if (accountNumber !== confirmAccountNumber) {
         setError("Account numbers do not match");
         return false;
@@ -198,7 +198,7 @@ export default function CompleteProfilePage() {
           if (data.user.role === "ADMIN") {
             router.push("/admin");
           } else {
-            router.push("/flat");
+            router.push("/fiat");
           }
         }, 2000);
       } else {
@@ -217,7 +217,7 @@ export default function CompleteProfilePage() {
       <div className="min-h-screen bg-black">
         <SimpleNav />
         <div className="flex items-center justify-center p-4" style={{ height: 'calc(100vh - 80px)' }}>
-          <motion.div 
+          <motion.div
             className="text-center"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -227,7 +227,7 @@ export default function CompleteProfilePage() {
               animate={{ scale: 1 }}
               className="w-16 h-16 md:w-20 md:h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6"
             >
-              <img src="/srd_final.svg" alt="" className="w-48 h-48"/>
+              <img src="/srd_final.svg" alt="" className="w-48 h-48" />
             </motion.div>
             <h1 className="text-2xl md:text-3xl font-bold text-white mb-4 font-montserrat px-4">
               Profile Completed!
@@ -245,7 +245,7 @@ export default function CompleteProfilePage() {
     <div className="min-h-screen bg-black">
       {/* Navigation */}
       <SimpleNav />
-      
+
       {/* Main Content - Responsive container */}
       <div className="px-4 md:px-8 py-6 md:py-8 max-w-6xl mx-auto">
         <motion.div
@@ -263,7 +263,7 @@ export default function CompleteProfilePage() {
                 Add your UPI ID to start secure transactions instantly.
               </span>
             </div>
-            
+
             <div className="relative w-full">
               <input
                 type="text"
@@ -272,7 +272,7 @@ export default function CompleteProfilePage() {
                 placeholder="Paste your UPI ID here"
                 className="w-full bg-[#1E1C1C] rounded-lg px-3 py-3 pr-10 md:pr-20 text-white placeholder-gray-500 focus:outline-none focus:border-[#622DBF] focus:ring-1 focus:ring-[#622DBF]/20 font-montserrat text-sm border border-transparent"
               />
-              
+
               {/* Verified Checkmark */}
               {upiValidation.isVerified && (
                 <motion.div

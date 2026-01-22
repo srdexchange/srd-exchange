@@ -168,7 +168,7 @@ export default function WalletConnectModal({
           // Existing user with completed profile
           setAuthStep("success");
           setTimeout(() => {
-            router.push("/flat");
+            router.push("/fiat");
             onClose();
           }, 1500);
         }
@@ -303,8 +303,8 @@ export default function WalletConnectModal({
 
           <motion.div
             className={`fixed bg-[#0A0A0A] z-[9999] overflow-y-auto border border-[#622DBF] ${isMobile
-                ? "bottom-0 mx-2 left-0 right-0 h-[85vh] rounded-t-3xl"
-                : "top-0 right-0 h-full w-full max-w-xl sm:max-w-2xl rounded-md"
+              ? "bottom-0 mx-2 left-0 right-0 h-[85vh] rounded-t-3xl"
+              : "top-0 right-0 h-full w-full max-w-xl sm:max-w-2xl rounded-md"
               }`}
             initial={
               isMobile ? mobileVariants.initial : desktopVariants.initial
@@ -374,21 +374,21 @@ export default function WalletConnectModal({
                           <div className="flex items-start space-x-4 sm:space-x-2">
                             <div
                               className={`relative flex-shrink-0 ${isMobile
-                                  ? "w-10 h-10"
-                                  : "w-12 h-12 sm:w-12 sm:h-14"
+                                ? "w-10 h-10"
+                                : "w-12 h-12 sm:w-12 sm:h-14"
                                 }`}
                             >
                               {wallet.useIcon && wallet.iconComponent ? (
                                 <div
                                   className={`bg-gradient-to-br from-[#622DBF] to-[#8B5CF6] rounded-lg flex items-center justify-center ${isMobile
-                                      ? "w-10 h-10"
-                                      : "w-12 h-12 sm:w-12 sm:h-15"
+                                    ? "w-10 h-10"
+                                    : "w-12 h-12 sm:w-12 sm:h-15"
                                     }`}
                                 >
                                   <wallet.iconComponent
                                     className={`text-white ${isMobile
-                                        ? "w-6 h-6"
-                                        : "w-7 h-7 sm:w-8 sm:h-8"
+                                      ? "w-6 h-6"
+                                      : "w-7 h-7 sm:w-8 sm:h-8"
                                       }`}
                                   />
                                 </div>
@@ -406,8 +406,8 @@ export default function WalletConnectModal({
                               <div className="flex items-center justify-between mb-2">
                                 <div
                                   className={`text-white font-medium font-montserrat ${isMobile
-                                      ? "text-base"
-                                      : "text-md sm:text-lg"
+                                    ? "text-base"
+                                    : "text-md sm:text-lg"
                                     }`}
                                 >
                                   {wallet.name}
@@ -423,8 +423,8 @@ export default function WalletConnectModal({
                                   <span
                                     key={idx}
                                     className={`bg-[#622DBF]/20 text-gray-400 rounded-full font-montserrat ${isMobile
-                                        ? "text-xs px-2 py-1"
-                                        : "text-xs sm:text-sm px-3 py-1"
+                                      ? "text-xs px-2 py-1"
+                                      : "text-xs sm:text-sm px-3 py-1"
                                       }`}
                                   >
                                     {feature}
@@ -477,8 +477,8 @@ export default function WalletConnectModal({
                   <button
                     onClick={() => setShowAllWallets(false)}
                     className={`flex items-center space-x-2 text-gray-400 hover:text-white font-montserrat ${isMobile
-                        ? "mb-4 text-sm"
-                        : "mb-6 sm:mb-8 text-sm sm:text-base"
+                      ? "mb-4 text-sm"
+                      : "mb-6 sm:mb-8 text-sm sm:text-base"
                       }`}
                   >
                     <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
@@ -534,8 +534,8 @@ export default function WalletConnectModal({
                 >
                   <motion.div
                     className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center transition-all mt-0.5 ${acceptTerms
-                        ? 'bg-[#622DBF] border-[#622DBF]'
-                        : 'bg-[#1E1C1C] border-[#3E3E3E] group-hover:border-[#622DBF]/50'
+                      ? 'bg-[#622DBF] border-[#622DBF]'
+                      : 'bg-[#1E1C1C] border-[#3E3E3E] group-hover:border-[#622DBF]/50'
                       }`}
                     onClick={() => setAcceptTerms(!acceptTerms)}
                     whileTap={{ scale: 0.9 }}
@@ -584,8 +584,8 @@ export default function WalletConnectModal({
               >
                 <h3
                   className={`text-white font-medium font-montserrat ${isMobile
-                      ? "text-base mb-4"
-                      : "text-lg sm:text-xl mb-4 sm:mb-6"
+                    ? "text-base mb-4"
+                    : "text-lg sm:text-xl mb-4 sm:mb-6"
                     }`}
                 >
                   Why connect your wallet?

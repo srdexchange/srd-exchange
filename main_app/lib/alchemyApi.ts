@@ -91,11 +91,13 @@ export async function fetchTransactionHistoryAlchemy(userAddress: string): Promi
         // Format transactions for display
         const transactions = allTransfers.map((transfer: any) => {
             const date = transfer.metadata?.blockTimestamp
-                ? new Date(transfer.metadata.blockTimestamp).toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: '2-digit'
-                })
+                ? new Date(transfer.metadata.blockTimestamp).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                }).replace(',', ', ')
                 : 'Recent'
 
             return {

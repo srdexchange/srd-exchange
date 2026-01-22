@@ -280,17 +280,17 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     const renderHeader = () => {
         if (currentView === 'Main') {
             return (
-                <div className="relative flex flex-col items-end p-6 gap-2">
-                    <div className="flex items-center gap-2">
+                <div className="relative flex flex-col p-6 gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                            <Image src="/side.svg" alt="Close" width={24} height={24} />
+                        </button>
                         <button
                             onClick={() => setShowDisconnect(!showDisconnect)}
                             className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
                         >
                             <Image src="/srd_gen.svg" alt="User" width={24} height={24} />
                             <span className="text-white text-sm font-medium">{formatAddress(displayAddress || "0x0000...0000")}</span>
-                        </button>
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                            <X className="w-5 h-5 text-gray-400" />
                         </button>
                     </div>
 
@@ -327,7 +327,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     }
 
     const renderReceiveView = () => (
-        <div className="flex-1 px-6 flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 px-6 pb-20 flex flex-col items-center space-y-8 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
             {/* Warning Box */}
             <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
                 <div className="mt-1">
@@ -390,7 +390,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     )
 
     const renderSendView = () => (
-        <div className="flex-1 px-6 flex flex-col space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 px-6 pb-20 flex flex-col space-y-8 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
             {/* Warning Box */}
             <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
                 <div className="mt-1 shrink-0">
@@ -544,67 +544,70 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                         {renderHeader()}
 
                         {currentView === 'Main' ? (
-                            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-8">
-                                {/* Wallet Card */}
-                                <div className="relative overflow-hidden aspect-[1.8/1] rounded-3xl bg-[#111] border border-white/5 p-8 flex flex-col justify-center">
-                                    {/* Background Watermark/Logo */}
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
-                                        <Image src="/srd.jpg" alt="" width={160} height={160} className="grayscale brightness-200" />
-                                    </div>
-
-                                    <div className="relative z-10 flex flex-col gap-1">
-                                        <h3 className="text-3xl font-bold text-white tracking-tight">
-                                            {parseFloat(userBalances?.usdt || "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT
-                                        </h3>
-                                        <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
-                                            <span className="opacity-50">== ~</span> {calculateInr()} ₹
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Action Buttons */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <button
-                                        onClick={() => setCurrentView('Receive')}
-                                        className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-2xl font-bold text-lg transition-all active:scale-95"
-                                    >
-                                        <div className="w-6 h-6 rounded-full flex items-center justify-center">
-                                            <Image src="/rec.svg" alt="Receive" width={24} height={24} />
+                            <div className="flex-1 flex flex-col overflow-hidden px-6 pb-20">
+                                {/* Fixed Content Section */}
+                                <div className="shrink-0 space-y-8 pt-8">
+                                    {/* Wallet Card */}
+                                    <div className="relative overflow-hidden aspect-[1.8/1] rounded-3xl bg-[#111] border border-white/5 p-8 flex flex-col justify-center">
+                                        {/* Background Watermark/Logo */}
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
+                                            <Image src="/image.png" alt="" width={160} height={160} className="grayscale brightness-200" />
                                         </div>
-                                        Receive
-                                    </button>
-                                    <button
-                                        onClick={() => setCurrentView('Send')}
-                                        className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-2xl font-bold text-lg transition-all active:scale-95"
-                                    >
-                                        <div className="w-6 h-6  rounded-full flex items-center justify-center">
-                                            <Image src="/send.svg" alt="Send" width={24} height={24} />
+
+                                        <div className="relative z-10 flex flex-col gap-1">
+                                            <h3 className="text-3xl font-bold text-white tracking-tight">
+                                                {parseFloat(userBalances?.usdt || "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT
+                                            </h3>
+                                            <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
+                                                <span className="opacity-50">== ~</span> {calculateInr()} ₹
+                                            </p>
                                         </div>
-                                        Send
-                                    </button>
-                                </div>
-
-                                {/* Gasless Badge */}
-                                <div className="flex justify-center">
-                                    <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-green-500/30 bg-green-500/10 text-[#00FF5E] text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(0,255,94,0.1)]">
-                                        <Flame className="w-4 h-4 fill-current" />
-                                        Gasless Transaction
                                     </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            onClick={() => setCurrentView('Receive')}
+                                            className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-xl font-bold text-lg transition-all active:scale-95"
+                                        >
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center">
+                                                <Image src="/rec.svg" alt="Receive" width={24} height={24} />
+                                            </div>
+                                            Receive
+                                        </button>
+                                        <button
+                                            onClick={() => setCurrentView('Send')}
+                                            className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-xl font-bold text-lg transition-all active:scale-95"
+                                        >
+                                            <div className="w-6 h-6  rounded-full flex items-center justify-center">
+                                                <Image src="/send.svg" alt="Send" width={24} height={24} />
+                                            </div>
+                                            Send
+                                        </button>
+                                    </div>
+
+                                    {/* Gasless Badge */}
+                                    <div className="flex justify-center">
+                                        <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-green-500/30 bg-green-500/10 text-[#00FF5E] text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(0,255,94,0.1)]">
+                                            <Flame className="w-4 h-4 fill-current" />
+                                            Gasless Transaction
+                                        </div>
+                                    </div>
+
+                                    <hr className="border-white/5" />
                                 </div>
 
-                                <hr className="border-white/5" />
-
-                                {/* History Section */}
-                                <div className="space-y-6">
-                                    <h4 className="text-center text-xl font-bold text-white">History</h4>
+                                {/* Scrollable History Section */}
+                                <div className="flex-1 flex flex-col min-h-0 mt-8">
+                                    <h4 className="text-center text-xl font-bold text-white mb-6 shrink-0">History</h4>
 
                                     {/* Tabs */}
-                                    <div className="flex justify-center p-8 rounded-xl gap-1">
+                                    <div className="flex justify-center p-4 rounded-xl gap-4 shrink-0">
                                         {(['All', 'Deposit', 'Withdraw'] as const).map((tab) => (
                                             <button
                                                 key={tab}
                                                 onClick={() => setActiveTab(tab)}
-                                                className={`flex-1 py-2 px-6 text-sm font-bold  transition-all ${activeTab === tab
+                                                className={`flex-1 py-2 px-2 text-sm font-bold  transition-all ${activeTab === tab
                                                     ? 'bg-[#6320EE] text-white shadow-lg'
                                                     : 'text-gray-100 hover:text-white'
                                                     }`}
@@ -614,16 +617,20 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                         ))}
                                     </div>
 
-                                    {/* List */}
-                                    <div className="space-y-3">
+                                    {/* List - This is the only scrollable part */}
+                                    <div className="flex-1 overflow-y-scroll pr-2 space-y-3 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#6320EE]/5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6320EE]/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[#6320EE]/40">
                                         {isHistoryLoading ? (
                                             <div className="flex flex-col items-center justify-center py-12 space-y-4">
                                                 <div className="w-8 h-8 border-4 border-[#6320EE] border-t-transparent rounded-full animate-spin" />
-                                                <p className="text-gray-500 text-sm font-medium">Fetching blockchain data...</p>
+                                                <p className="text-gray-500 text-sm font-medium">
+                                                    Fetching blockchain data...
+                                                </p>
                                             </div>
                                         ) : historyData.length === 0 ? (
                                             <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
-                                                <p className="text-gray-500 text-sm">No recent transactions found</p>
+                                                <p className="text-gray-500 text-sm">
+                                                    No recent transactions found
+                                                </p>
                                             </div>
                                         ) : (
                                             historyData
@@ -634,20 +641,26 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                                 .map((item, i) => (
                                                     <div
                                                         key={i}
-                                                        className="flex items-center justify-between p-4 hover:bg-white-[0.07] border border-white/5 rounded-2xl transition-all group"
+                                                        className="flex items-center justify-between p-4 hover:bg-white/[0.07] border border-white/5 rounded-2xl transition-all group"
                                                     >
                                                         <div className="flex items-center gap-4">
                                                             <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                <ShoppingCart className="w-5 h-5 text-gray-300" />
+                                                                {item.type === 'Deposit' ? (
+                                                                    <Image src="/deposit.svg" alt="Deposit" width={20} height={20} className="w-5 h-5 text-green-400" />
+                                                                ) : (
+                                                                    <Image src="/withdraw.svg" alt="Withdraw" width={20} height={20} className="w-5 h-5 text-orange-400" />
+                                                                )}
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <span className="text-white font-bold">{item.type}</span>
-                                                                <span className="text-gray-500 text-xs">{item.date}</span>
+
                                                             </div>
                                                         </div>
 
                                                         <div className="flex items-center gap-6">
-                                                            <span className="text-white font-bold">{item.amount?.split(' ')[0].slice(0, 8)} USDT</span>
+                                                            <span className="text-white font-bold">
+                                                                {item.amount?.split(' ')[0].slice(0, 8)} USDT
+                                                            </span>
                                                             <a
                                                                 href={`https://bscscan.com/tx/${item.hash}`}
                                                                 target="_blank"

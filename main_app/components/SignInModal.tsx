@@ -31,7 +31,7 @@ const SignInModal: FC<Props> = ({ onClose }) => {
       } else if (role === 'ADMIN') {
         window.location.href = '/admin'
       } else {
-        window.location.href = '/flat'
+        window.location.href = '/fiat'
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred')

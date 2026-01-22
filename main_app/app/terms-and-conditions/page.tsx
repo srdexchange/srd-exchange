@@ -13,7 +13,7 @@ export default function TermsAndConditionsPage() {
       // Store acceptance in localStorage
       localStorage.setItem(`terms_accepted_${address}`, 'true')
       // Redirect to dashboard
-      router.push('/flat')
+      router.push('/fiat')
     }
   }
 

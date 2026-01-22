@@ -38,14 +38,14 @@ export default function LandingPage() {
   useEffect(() => {
     if (isConnected) {
       console.log('User connected, redirecting to dashboard...');
-      router.push('/flat');
+      router.push('/fiat');
     }
   }, [isConnected, router]);
 
   const handleTradeNow = () => {
     if (isConnected) {
       // If already connected, redirect to dashboard immediately
-      router.push('/flat');
+      router.push('/fiat');
     } else {
       // If not connected, open the wallet modal for connection
       setOpen(true);
