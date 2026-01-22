@@ -110,7 +110,7 @@ export default function WalletConnectModal({
         if (registerRes.ok) {
           setAuthStep('success')
           setTimeout(() => {
-            router.push(registerData.user.role === 'ADMIN' ? '/admin' : '/flat')
+            router.push(registerData.user.role === 'ADMIN' ? '/admin' : '/fiat')
             onClose()
           }, 1500)
         } else {
@@ -120,7 +120,7 @@ export default function WalletConnectModal({
         // Existing user
         setAuthStep('success')
         setTimeout(() => {
-          router.push(authData.user.role === 'ADMIN' ? '/admin' : '/flat')
+          router.push(authData.user.role === 'ADMIN' ? '/admin' : '/fiat')
           onClose()
         }, 1500)
       }
@@ -276,10 +276,10 @@ export default function WalletConnectModal({
                       onClick={() => handleConnect(wallet)}
                       disabled={isDisabled}
                       className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${isComingSoon
+                        ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
+                        : !acceptedTerms
                           ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
-                          : !acceptedTerms
-                            ? 'bg-gray-900/50 border-gray-700/50 cursor-not-allowed opacity-60'
-                            : 'bg-gray-900/80 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80'
+                          : 'bg-gray-900/80 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80'
                         }`}
                       whileHover={!isDisabled ? { scale: 1.02 } : {}}
                       whileTap={!isDisabled ? { scale: 0.98 } : {}}
@@ -317,8 +317,8 @@ export default function WalletConnectModal({
                   <button
                     onClick={() => setAcceptedTerms(!acceptedTerms)}
                     className={`mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 ${acceptedTerms
-                        ? 'bg-[#622DBF] border-[#622DBF]'
-                        : 'border-gray-600 hover:border-gray-500'
+                      ? 'bg-[#622DBF] border-[#622DBF]'
+                      : 'border-gray-600 hover:border-gray-500'
                       }`}
                   >
                     {acceptedTerms && (
@@ -509,8 +509,8 @@ export function WalletDashboard() {
 
       {/* Trading Status */}
       <div className={`p-4 rounded-lg border ${canTrade
-          ? 'bg-green-500/10 border-green-500/20'
-          : 'bg-red-500/10 border-red-500/20'
+        ? 'bg-green-500/10 border-green-500/20'
+        : 'bg-red-500/10 border-red-500/20'
         }`}>
         <div className="flex items-center space-x-3">
           <div className={`w-3 h-3 rounded-full ${canTrade ? 'bg-green-400' : 'bg-red-400'
