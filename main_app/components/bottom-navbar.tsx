@@ -9,7 +9,7 @@ import Image from 'next/image';
 
 const BottomNavbar = () => {
     const pathname = usePathname();
-    const { openSidebar } = useSidebar();
+    const { openSidebar, closeSidebar } = useSidebar();
 
     const navItems = [
         {
@@ -23,7 +23,7 @@ const BottomNavbar = () => {
             href: '/trade',
         },
         {
-            label: 'Flat',
+            label: 'Fiat',
             icon: <Image src="/fiat.svg" alt="Flat" width={20} height={20} className="w-5 h-5" />,
             href: '/fiat',
         },
@@ -50,7 +50,7 @@ const BottomNavbar = () => {
                         <motion.div
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            onClick={item.isAction ? openSidebar : undefined}
+                            onClick={item.isAction ? openSidebar : closeSidebar}
                             className={`relative flex flex-col items-center gap-1 px-2 py-1.5 md:px-4 md:py-2 rounded-xl transition-all duration-300 cursor-pointer ${isActive
                                 ? 'text-[#6320EE]'
                                 : 'text-gray-500 hover:text-gray-300'
