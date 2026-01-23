@@ -33,6 +33,7 @@ interface Order {
   user: {
     id: string;
     walletAddress: string;
+    smartWalletAddress?: string | null;
     upiId: string | null;
     bankDetails: any;
   };
@@ -40,7 +41,7 @@ interface Order {
 
 const CONTRACTS = {
   USDT: {
-    [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, 
+    [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`,
   },
   P2P_TRADING: {
     [56]: "0xbfb247eA56F806607f2346D9475F669F30EAf2fB" as `0x${string}`,
@@ -196,47 +197,47 @@ export default function AdminCenter() {
     };
   }>({});
 
-// In admin_center.tsx, update the database update event listener:
+  // In admin_center.tsx, update the database update event listener:
 
-useEffect(() => {
-  const handleDatabaseUpdate = (event: CustomEvent) => {
-    const { orderId, action, userConfirmedReceived } = event.detail;
-    
-    console.log('🔄 Database update received in admin center:', {
-      orderId,
-      action,
-      userConfirmedReceived
-    });
-    
-    if (action === 'userConfirmedReceived') {
-      console.log('💾 User confirmed money received - updating orders state');
+  useEffect(() => {
+    const handleDatabaseUpdate = (event: CustomEvent) => {
+      const { orderId, action, userConfirmedReceived } = event.detail;
 
-      // Update local state immediately
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          (order.fullId === orderId || order.id === orderId)
-            ? { 
-                ...order, 
+      console.log('🔄 Database update received in admin center:', {
+        orderId,
+        action,
+        userConfirmedReceived
+      });
+
+      if (action === 'userConfirmedReceived') {
+        console.log('💾 User confirmed money received - updating orders state');
+
+        // Update local state immediately
+        setOrders(prevOrders =>
+          prevOrders.map(order =>
+            (order.fullId === orderId || order.id === orderId)
+              ? {
+                ...order,
                 userConfirmedReceived: true,
                 userConfirmedAt: new Date().toISOString()
               }
-            : order
-        )
-      );
-  
-      setTimeout(() => {
-        console.log('🔄 Refreshing orders from database');
-        fetchAcceptedOrders();
-      }, 2000); 
-    }
-  };
+              : order
+          )
+        );
 
-  window.addEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
+        setTimeout(() => {
+          console.log('🔄 Refreshing orders from database');
+          fetchAcceptedOrders();
+        }, 2000);
+      }
+    };
 
-  return () => {
-    window.removeEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
-  };
-}, []);
+    window.addEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
+
+    return () => {
+      window.removeEventListener('orderDatabaseUpdated', handleDatabaseUpdate as EventListener);
+    };
+  }, []);
   useEffect(() => {
     if (chainId && chainId !== 56) {
       console.warn(
@@ -325,8 +326,8 @@ useEffect(() => {
       });
 
       // 🔥 ENHANCED: More flexible order ID matching
-      const matchingOrder = orders.find(order => 
-        order.fullId === orderId || 
+      const matchingOrder = orders.find(order =>
+        order.fullId === orderId ||
         order.id === orderId ||
         order.fullId?.includes(orderId) ||
         orderId?.includes(order.fullId)
@@ -334,7 +335,7 @@ useEffect(() => {
 
       if (matchingOrder) {
         console.log("✅ Found matching order for notification:", matchingOrder.fullId);
-        
+
         setUserMoneyNotifications((prev) => ({
           ...prev,
           [orderId]: {
@@ -362,7 +363,7 @@ useEffect(() => {
 
     // 🔥 ENHANCED: Add the event listener immediately and also listen on document
     console.log("🎧 Setting up user money received event listener in admin center");
-    
+
     window.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
     document.addEventListener('userReceivedMoney', handleUserReceivedMoney as EventListener);
 
@@ -475,12 +476,12 @@ useEffect(() => {
       return parsedId;
     }
 
-  
+
     let hash = 0;
     for (let i = 0; i < order.fullId.length; i++) {
       const char = order.fullId.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash; 
+      hash = hash & hash;
     }
     const hashId = (Math.abs(hash) % 1000000) + 1;
 
@@ -520,7 +521,7 @@ useEffect(() => {
 
       const GAS_STATION_ADDRESS = "0x1dA2b030808D46678284dB112bfe066AA9A8be0E";
 
-      const approveAmount = "1000000"; 
+      const approveAmount = "1000000";
 
       console.log(
         "🔓 Approving large amount for multiple future transactions:",
@@ -689,10 +690,10 @@ useEffect(() => {
               // Safety check for large amounts
               const confirmLargeTransfer = confirm(
                 `⚠️ LARGE TRANSFER CONFIRMATION\n\n` +
-                  `You are about to transfer ${usdtAmountToTransfer} USDT\n` +
-                  `Order Amount: ₹${order.amount}\n` +
-                  `Rate: ₹${buyRate}/USDT\n\n` +
-                  `Click OK to confirm this transfer`
+                `You are about to transfer ${usdtAmountToTransfer} USDT\n` +
+                `Order Amount: ₹${order.amount}\n` +
+                `Rate: ₹${buyRate}/USDT\n\n` +
+                `Click OK to confirm this transfer`
               );
 
               if (!confirmLargeTransfer) {
@@ -711,12 +712,12 @@ useEffect(() => {
               // Show one-time approval modal
               const shouldApprove = confirm(
                 `🔐 ONE-TIME SETUP REQUIRED\n\n` +
-                  `To enable Gas Station transfers, you need to approve USDT spending once.\n\n` +
-                  `✅ You pay gas for this approval (~$0.20)\n` +
-                  `✅ Gas Station pays gas for all future transfers\n` +
-                  `✅ Approving 1,000,000 USDT for future orders\n\n` +
-                  `Current order: ${usdtAmountToTransfer} USDT (₹${order.amount})\n\n` +
-                  `Click OK to approve (one-time only)`
+                `To enable Gas Station transfers, you need to approve USDT spending once.\n\n` +
+                `✅ You pay gas for this approval (~$0.20)\n` +
+                `✅ Gas Station pays gas for all future transfers\n` +
+                `✅ Approving 1,000,000 USDT for future orders\n\n` +
+                `Current order: ${usdtAmountToTransfer} USDT (₹${order.amount})\n\n` +
+                `Click OK to approve (one-time only)`
               );
 
               if (!shouldApprove) {
@@ -1094,8 +1095,8 @@ useEffect(() => {
             : order
         )
       );
-    
-      
+
+
     } catch (error) {
       console.error('❌ Error dismissing user confirmation:', error);
     }
@@ -1170,7 +1171,7 @@ useEffect(() => {
             🧪 Test Notification (Dev Only)
           </button>
         </div>
-      )}  
+      )}
 
       <div className="space-y-4">
         {loading ? (
@@ -1231,11 +1232,10 @@ useEffect(() => {
             return (
               <div
                 key={order.fullId}
-                className={`rounded-md py-2 px-2 cursor-pointer transition-all duration-200 ${
-                  selectedOrderIndex === index
+                className={`rounded-md py-2 px-2 cursor-pointer transition-all duration-200 ${selectedOrderIndex === index
                     ? "bg-gradient-to-r from-purple-600/30 to-purple-500/20 border-2 border-purple-500 shadow-lg shadow-purple-500/20"
                     : "bg-[#1D1C1C] border-2 border-transparent hover:bg-[#2A2A2A] hover:border-purple-500/30"
-                }`}
+                  }`}
                 onClick={() => handleOrderClick(order, index)}
               >
                 {selectedOrderIndex === index && (
@@ -1278,7 +1278,7 @@ useEffect(() => {
                       </button>
                     </div>
                     <div className="text-xs text-green-300 mt-1">
-                      Amount: ₹{order.amount} • 
+                      Amount: ₹{order.amount} •
                       Confirmed: {order.userConfirmedAt ? new Date(order.userConfirmedAt).toLocaleString() : 'Just now'}
                     </div>
                     <div className="text-xs text-green-200 mt-1 italic">
@@ -1287,78 +1287,88 @@ useEffect(() => {
                   </div>
                 )}
 
-                {order.orderType.includes("SELL") && 
+                {order.orderType.includes("SELL") &&
                   (userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id]) && (
-                  <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className="text-green-400 font-medium text-sm">
-                          💰 User received money in their account
-                        </span>
+                    <div className="mb-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <span className="text-green-400 font-medium text-sm">
+                            💰 User received money in their account
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissNotification(order.fullId || order.id);
+                          }}
+                          className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
+                        >
+                          ✕
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          dismissNotification(order.fullId || order.id);
-                        }}
-                        className="text-green-300 hover:text-white text-xs px-2 py-1 rounded bg-green-700/30 hover:bg-green-600/50 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <div className="text-xs text-green-300 mt-1">
+                        Amount: ₹{(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.amount} •
+                        Time: {(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.timestamp.toLocaleTimeString()}
+                      </div>
                     </div>
-                    <div className="text-xs text-green-300 mt-1">
-                      Amount: ₹{(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.amount} • 
-                      Time: {(userMoneyNotifications[order.fullId] || userMoneyNotifications[order.id])?.timestamp.toLocaleTimeString()}
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <span
-                      className={`text-md font-medium ${
-                        selectedOrderIndex === index
+                      className={`text-md font-medium ${selectedOrderIndex === index
                           ? "text-white"
                           : "text-white"
-                      }`}
+                        }`}
                     >
                       {order.id}
                     </span>
                     <div
-                      className={`text-xs ${
-                        selectedOrderIndex === index
+                      className={`text-xs ${selectedOrderIndex === index
                           ? "text-purple-200"
                           : "text-white"
-                      }`}
+                        }`}
                     >
                       {order.time}
                     </div>
                     <div
-                      className={`text-xs mt-1 ${
-                        selectedOrderIndex === index
+                      className={`text-xs mt-1 ${selectedOrderIndex === index
                           ? "text-purple-300"
                           : "text-gray-400"
-                      }`}
+                        }`}
                     >
-                      {order.user.walletAddress.slice(0, 6)}...
-                      {order.user.walletAddress.slice(-4)}
+                      {order.user.smartWalletAddress ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-gray-500">SW:</span>
+                            <span>{order.user.smartWalletAddress.slice(0, 6)}...{order.user.smartWalletAddress.slice(-4)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-gray-500">EOA:</span>
+                            <span>{order.user.walletAddress.slice(0, 6)}...{order.user.walletAddress.slice(-4)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span>
+                          {order.user.walletAddress.slice(0, 6)}...
+                          {order.user.walletAddress.slice(-4)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div
-                    className={`flex items-center space-x-2 border py-0.5 px-0.5 rounded ${
-                      selectedOrderIndex === index
+                    className={`flex items-center space-x-2 border py-0.5 px-0.5 rounded ${selectedOrderIndex === index
                         ? "border-purple-400/50"
                         : "border-[#464646]"
-                    }`}
+                      }`}
                   >
                     <span
-                      className={`font-bold py-0.5 px-1.5 rounded-sm ${
-                        selectedOrderIndex === index
+                      className={`font-bold py-0.5 px-1.5 rounded-sm ${selectedOrderIndex === index
                           ? "bg-purple-800/30 text-white"
                           : "bg-[#222] text-white"
-                      }`}
+                        }`}
                     >
                       {primaryAmount}
                     </span>
@@ -1373,21 +1383,19 @@ useEffect(() => {
                         className="flex-shrink-0"
                       />
                       <span
-                        className={`text-sm ${
-                          selectedOrderIndex === index
+                        className={`text-sm ${selectedOrderIndex === index
                             ? "text-purple-200"
                             : "text-gray-400"
-                        }`}
+                          }`}
                       >
                         {order.type}
                       </span>
                     </div>
                     <span
-                      className={`font-bold py-0.5 px-1.5 rounded-sm ${
-                        selectedOrderIndex === index
+                      className={`font-bold py-0.5 px-1.5 rounded-sm ${selectedOrderIndex === index
                           ? "bg-purple-800/30 text-white"
                           : "bg-[#222] text-white"
-                      }`}
+                        }`}
                     >
                       {secondaryAmount}
                     </span>
@@ -1412,11 +1420,10 @@ useEffect(() => {
                       />
                     )}
                     <span
-                      className={`text-sm ${
-                        selectedOrderIndex === index
+                      className={`text-sm ${selectedOrderIndex === index
                           ? "text-white font-medium"
                           : "text-white"
-                      }`}
+                        }`}
                     >
                       {order.currency}
                     </span>
@@ -1425,11 +1432,10 @@ useEffect(() => {
 
                 <div className="text-center mb-2">
                   <span
-                    className={`text-xs ${
-                      selectedOrderIndex === index
+                    className={`text-xs ${selectedOrderIndex === index
                         ? "text-purple-300"
                         : "text-gray-500"
-                    }`}
+                      }`}
                   >
                     Rate: {rateDisplay}
                   </span>
@@ -1475,9 +1481,8 @@ useEffect(() => {
                       className={`px-3 py-1 rounded-xs text-xs font-medium flex items-center space-x-1 transition-all hover:opacity-80 cursor-pointer ${getTagColor(
                         tag,
                         index
-                      )} ${tag === "Accepted" ? "hover:bg-red-600" : ""} ${
-                        selectedOrderIndex === index ? "shadow-sm" : ""
-                      }`}
+                      )} ${tag === "Accepted" ? "hover:bg-red-600" : ""} ${selectedOrderIndex === index ? "shadow-sm" : ""
+                        }`}
                     >
                       {hasUserIcon(tag, index) && <User className="w-3 h-3" />}
                       <span>{tag}</span>
