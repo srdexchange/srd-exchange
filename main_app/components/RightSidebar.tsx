@@ -335,7 +335,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                         <span className="text-black text-xs font-bold font-serif">!</span>
                     </div>
                 </div>
-                <p className="text-white text-sm font-medium leading-tight">
+                <p className="text-white text-sm font-medium pt-2 leading-tight">
                     Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
                 </p>
             </div>
