@@ -125,7 +125,7 @@ export default function Navbar() {
           >
             <div>
               <Image
-                src="/srd-final.svg"
+                src="/srd_final.svg"
                 alt="SRD Exchange Logo"
                 width={44}
                 height={44}
