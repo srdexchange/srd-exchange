@@ -21,7 +21,7 @@ export default function SimpleNav() {
         {/* Logo Section - Left */}
         <div className="flex items-center space-x-2">
           <Image
-            src="/srd_final.svg"
+            src="/image.png"
             alt="SRD Exchange Logo"
             width={80}
             height={80}

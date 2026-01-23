@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface SidebarContextType {
     isSidebarOpen: boolean;
@@ -13,6 +14,12 @@ const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export const SidebarProvider = ({ children }: { children: ReactNode }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const pathname = usePathname();
+
+    // Close sidebar on route change
+    useEffect(() => {
+        setIsSidebarOpen(false);
+    }, [pathname]);
 
     const openSidebar = () => setIsSidebarOpen(true);
     const closeSidebar = () => setIsSidebarOpen(false);

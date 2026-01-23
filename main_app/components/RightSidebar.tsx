@@ -598,11 +598,11 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                 </div>
 
                                 {/* Scrollable History Section */}
-                                <div className="flex-1 flex flex-col min-h-0 mt-8">
+                                <div className="flex-1 flex flex-col min-h-0 mt-2">
                                     <h4 className="text-center text-xl font-bold text-white mb-6 shrink-0">History</h4>
 
                                     {/* Tabs */}
-                                    <div className="flex justify-center p-4 rounded-xl gap-4 shrink-0">
+                                    <div className="flex justify-center p-2 rounded-xl gap-4 shrink-0">
                                         {(['All', 'Deposit', 'Withdraw'] as const).map((tab) => (
                                             <button
                                                 key={tab}
@@ -618,17 +618,17 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                     </div>
 
                                     {/* List - This is the only scrollable part */}
-                                    <div className="flex-1 overflow-y-scroll pr-2 space-y-3 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#6320EE]/5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6320EE]/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[#6320EE]/40">
+                                    <div className="flex-1 overflow-y-scroll pr-2 space-y-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#6320EE]/5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6320EE]/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[#6320EE]/40">
                                         {isHistoryLoading ? (
-                                            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                                                <div className="w-8 h-8 border-4 border-[#6320EE] border-t-transparent rounded-full animate-spin" />
-                                                <p className="text-gray-500 text-sm font-medium">
+                                            <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                                                <div className="w-6 h-6 border-2 border-[#6320EE] border-t-transparent rounded-full animate-spin" />
+                                                <p className="text-gray-500 text-xs font-medium">
                                                     Fetching blockchain data...
                                                 </p>
                                             </div>
                                         ) : historyData.length === 0 ? (
-                                            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
-                                                <p className="text-gray-500 text-sm">
+                                            <div className="text-center py-8 border border-dashed border-white/10 rounded-xl">
+                                                <p className="text-gray-500 text-xs">
                                                     No recent transactions found
                                                 </p>
                                             </div>
@@ -641,24 +641,23 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                                 .map((item, i) => (
                                                     <div
                                                         key={i}
-                                                        className="flex items-center justify-between p-4 hover:bg-white/[0.07] border border-white/5 rounded-2xl transition-all group"
+                                                        className="flex items-center justify-between p-3 hover:bg-white/[0.07] border border-white/5 rounded-xl transition-all group"
                                                     >
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                                                                 {item.type === 'Deposit' ? (
-                                                                    <Image src="/deposit.svg" alt="Deposit" width={20} height={20} className="w-5 h-5 text-green-400" />
+                                                                    <Image src="/deposit.svg" alt="Deposit" width={16} height={16} className="w-4 h-4 text-green-400" />
                                                                 ) : (
-                                                                    <Image src="/withdraw.svg" alt="Withdraw" width={20} height={20} className="w-5 h-5 text-orange-400" />
+                                                                    <Image src="/withdraw.svg" alt="Withdraw" width={16} height={16} className="w-4 h-4 text-orange-400" />
                                                                 )}
                                                             </div>
                                                             <div className="flex flex-col">
-                                                                <span className="text-white font-bold">{item.type}</span>
-
+                                                                <span className="text-white text-sm font-bold">{item.type}</span>
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex items-center gap-6">
-                                                            <span className="text-white font-bold">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-white text-sm font-bold">
                                                                 {item.amount?.split(' ')[0].slice(0, 8)} USDT
                                                             </span>
                                                             <a
@@ -667,8 +666,8 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                                                 rel="noopener noreferrer"
                                                                 className="flex items-center gap-1 text-[#6320EE] hover:text-[#7e45f1] transition-colors font-medium"
                                                             >
-                                                                <span className="text-sm">Tx Hash</span>
-                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                <span className="text-xs">Tx Hash</span>
+                                                                <ExternalLink className="w-3 h-3" />
                                                             </a>
                                                         </div>
                                                     </div>
