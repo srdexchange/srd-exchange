@@ -445,8 +445,8 @@ export default function AdminRight() {
           <button
             onClick={() => setActiveTab('UPI')}
             className={`flex-1 py-2 px-4 rounded-md font-medium transition-all font-montserrat ${activeTab === 'UPI'
-                ? 'bg-[#622DBF] text-white'
-                : 'bg-[#101010] text-gray-300 border border-[#3E3E3E] hover:bg-gray-700/50'
+              ? 'bg-[#622DBF] text-white'
+              : 'bg-[#101010] text-gray-300 border border-[#3E3E3E] hover:bg-gray-700/50'
               }`}
           >
             UPI
@@ -454,8 +454,8 @@ export default function AdminRight() {
           <button
             onClick={() => setActiveTab('CDM')}
             className={`flex-1 py-2 px-4 rounded-md font-medium transition-all font-montserrat ${activeTab === 'CDM'
-                ? 'bg-[#622DBF] text-white'
-                : 'bg-[#101010] text-gray-300 border border-[#3E3E3E] hover:bg-gray-700/50'
+              ? 'bg-[#622DBF] text-white'
+              : 'bg-[#101010] text-gray-300 border border-[#3E3E3E] hover:bg-gray-700/50'
               }`}
           >
             CDM
@@ -705,50 +705,27 @@ export default function AdminRight() {
             <h3 className="text-lg font-semibold text-white mb-4 font-montserrat">User Info</h3>
             <div className="space-y-3">
               {selectedOrder.user.smartWalletAddress ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <User className="w-5 h-5 text-white" />
-                      <span className="text-gray-400 text-sm font-montserrat">Smart Wallet:</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-white text-sm font-montserrat">
-                        {selectedOrder.user.smartWalletAddress.slice(0, 6)}...{selectedOrder.user.smartWalletAddress.slice(-4)}
-                      </span>
-                      <button
-                        onClick={() => handleCopy(selectedOrder.user.smartWalletAddress!, 'smartWallet')}
-                        className="text-gray-400 hover:text-white transition-colors"
-                      >
-                        {copiedField === 'smartWallet' ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <User className="w-5 h-5 text-white" />
+                    <span className="text-gray-400 text-sm font-montserrat">Wallet:</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <User className="w-5 h-5 text-gray-400" />
-                      <span className="text-gray-400 text-sm font-montserrat">EOA Wallet:</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-white text-sm font-montserrat">
-                        {selectedOrder.user.walletAddress.slice(0, 6)}...{selectedOrder.user.walletAddress.slice(-4)}
-                      </span>
-                      <button
-                        onClick={() => handleCopy(selectedOrder.user.walletAddress, 'wallet')}
-                        className="text-gray-400 hover:text-white transition-colors"
-                      >
-                        {copiedField === 'wallet' ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-white text-sm font-montserrat">
+                      {selectedOrder.user.smartWalletAddress.slice(0, 6)}...{selectedOrder.user.smartWalletAddress.slice(-4)}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(selectedOrder.user.smartWalletAddress!, 'smartWallet')}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      {copiedField === 'smartWallet' ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
                   </div>
-                </>
+                </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -781,8 +758,8 @@ export default function AdminRight() {
               <button
                 onClick={() => setUserDetailsTab('UPI')}
                 className={`py-2 px-4 rounded text-sm font-medium transition-all font-montserrat ${userDetailsTab === 'UPI'
-                    ? 'bg-[#622DBF] text-white'
-                    : 'bg-[#1E1C1C] text-gray-400 border border-gray-600/50 hover:bg-gray-700/50'
+                  ? 'bg-[#622DBF] text-white'
+                  : 'bg-[#1E1C1C] text-gray-400 border border-gray-600/50 hover:bg-gray-700/50'
                   }`}
               >
                 USER UPI ID
@@ -790,8 +767,8 @@ export default function AdminRight() {
               <button
                 onClick={() => setUserDetailsTab('BANK')}
                 className={`py-2 px-4 rounded text-sm font-medium transition-all font-montserrat ${userDetailsTab === 'BANK'
-                    ? 'bg-[#622DBF] text-white'
-                    : 'bg-[#1E1C1C] text-gray-400 border border-gray-600/50 hover:bg-gray-700/50'
+                  ? 'bg-[#622DBF] text-white'
+                  : 'bg-[#1E1C1C] text-gray-400 border border-gray-600/50 hover:bg-gray-700/50'
                   }`}
               >
                 USER BANK DETAILS
