@@ -312,55 +312,6 @@ export default function BuySellSection() {
     throw new Error('Database order creation failed after all retries');
   };
 
-  /**
-   * Update database order with retry logic
-   * @param orderId - UUID of the order to update
-   * @param updateData - Data to update
-   * @param maxRetries - Maximum number of retries (default: 3)
-   */
-  const updateDatabaseOrderWithRetry = async (
-    orderId: string,
-    updateData: any,
-    maxRetries: number = 3
-  ): Promise<any> => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`📝 Database order update attempt ${attempt}/${maxRetries} for ${orderId}...`);
-
-        const response = await fetch(`/api/orders/${orderId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(updateData),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API error: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to update order');
-        }
-
-        console.log(`✅ Order updated successfully on attempt ${attempt}`);
-        return data.order;
-
-      } catch (error) {
-        console.error(`❌ Order update attempt ${attempt} failed:`, error);
-        if (attempt < maxRetries) {
-          const retryDelay = 2000 * attempt;
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-        } else {
-          // We rethrow here to let the caller handle it (or ignore it if they want)
-          throw error;
-        }
-      }
-    }
-  };
-
   // Wallet and orders data
   const {
     address: eoaAddress,
@@ -611,27 +562,7 @@ export default function BuySellSection() {
       // Get USDT decimals (BSC USDT uses 18 decimals)
       const usdtDecimals = 18;
 
-      console.log('📝 Creating initial pending database order...');
-
-      // 1. Create initial PENDING order in database
-      const initialOrderPayload = {
-        walletAddress: address,
-        orderType: orderType,
-        amount: finalOrderAmount,
-        usdtAmount: finalUsdtAmount,
-        buyRate: null,
-        sellRate: rate,
-        paymentMethod: paymentMethod.toUpperCase(),
-        blockchainOrderId: null,
-        status: 'PENDING', // Initial state
-        gasStationTxHash: null,
-        linkedEoaAddress: eoaAddress,
-      };
-
-      const dbOrder = await createDatabaseOrderWithRetry(initialOrderPayload);
-      console.log('✅ Initial order created:', dbOrder.id, 'Full ID:', dbOrder.fullId);
-
-      // 2. Initiate gasless transfer
+      // Send USDT directly to admin using gasless transfer
       console.log('💸 Initiating gasless USDT transfer to admin wallet...');
       const txHash = await sendGaslessUSDT(
         ADMIN_WALLET_ADDRESS,
@@ -641,30 +572,38 @@ export default function BuySellSection() {
 
       console.log('✅ Gasless USDT transfer successful:', txHash);
 
-      // 3. Immediately update order with txHash and status
-      // This ensures we save the proof even if confirmation takes time
-      console.log('📝 Updating order with transaction hash...');
-      await updateDatabaseOrderWithRetry(dbOrder.fullId, {
-        gasStationTxHash: txHash,
-        status: 'PENDING_ADMIN_PAYMENT'
-      });
-      console.log('✅ Order updated with transaction hash');
-
-      // 4. Wait for transaction confirmation
+      // Wait for transaction confirmation with retry logic
       console.log('⏳ Waiting for transaction confirmation...');
       const isConfirmed = await waitForTransactionConfirmation(txHash);
 
       if (!isConfirmed) {
-        console.warn('⚠️ Transaction not confirmed yet, but order is created and linked.');
-        // We don't throw here strictly because the order IS created and linked to the hash.
-        // Admin can verify manually.
-        alert('Transaction sent but taking longer than expected to confirm. Order has been created. Please check status later.');
-      } else {
-        console.log('✅ Transaction confirmed on-chain.');
+        throw new Error(
+          'Transaction confirmation failed. Your USDT transfer may still be pending. Please check BscScan and contact support if needed.'
+        );
       }
 
+      console.log('📝 Creating database order after confirmed USDT transfer...');
+
+      // Create database order with retry logic
+      const orderPayload = {
+        walletAddress: address,
+        orderType: orderType,
+        amount: finalOrderAmount,
+        usdtAmount: finalUsdtAmount,
+        buyRate: null,
+        sellRate: rate,
+        paymentMethod: paymentMethod.toUpperCase(),
+        blockchainOrderId: null,
+        status: 'PENDING_ADMIN_PAYMENT',
+        gasStationTxHash: txHash, // Store the gasless transfer hash
+        linkedEoaAddress: eoaAddress, // Link Smart Wallet to EOA user
+      };
+
+      const databaseOrder = await createDatabaseOrderWithRetry(orderPayload);
+      console.log('✅ Sell order created - USDT transferred to admin via gasless transaction');
+
       await Promise.all([refetchOrders(), refetchBalances()]);
-      return dbOrder;
+      return databaseOrder;
 
     } catch (sellError) {
       console.error('❌ Gasless sell order creation failed:', sellError);
