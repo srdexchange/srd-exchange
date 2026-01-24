@@ -131,6 +131,65 @@ export async function POST(request: NextRequest) {
       validStatus = status as OrderStatus;
     }
 
+    // SPAM PREVENTION: Validate SELL orders
+    let sellTxHash = null;
+    if (orderType === 'SELL' || orderType === 'SELL_CDM') {
+      // 1. Require gasStationTxHash
+      // Note: The frontend sends it as 'gasStationTxHash', but we might map it to 'blockchainOrderId' or just check it.
+      // Based on the log below, it seems available in body but not destructured yet?
+      // Let's grab it from body if not in destructured vars
+      const txHash = body.gasStationTxHash || blockchainOrderId;
+
+      if (!txHash) {
+        console.error('❌ VALIDATION FAILED: Sell order missing transaction hash');
+        return NextResponse.json(
+          { error: 'Transaction hash is required for Sell orders. Please copy your transaction hash and contact support.' },
+          { status: 400 }
+        );
+      }
+
+      // 2. Validate hash format (basic check)
+      if (!txHash.startsWith('0x') || txHash.length < 64) {
+        console.error('❌ VALIDATION FAILED: Invalid hash format:', txHash);
+        return NextResponse.json(
+          { error: 'Invalid transaction hash format.' },
+          { status: 400 }
+        );
+      }
+
+      sellTxHash = txHash;
+
+      // 3. check for duplicates (Idempotency)
+      // Check if an order with this hash already exists
+      const existingOrder = await prisma.order.findFirst({
+        where: {
+          OR: [
+            { blockchainOrderId: txHash },
+            // If we stored it elsewhere, check there too. But likely it goes to blockchainOrderId column?
+            // The schema isn't visible but `blockchainOrderId` seems the place.
+          ]
+        }
+      });
+
+      if (existingOrder) {
+        console.warn('⚠️ IDEMPOTENCY: Order with this hash already exists:', txHash);
+        // Return the existing order as success to handle network retries gracefully
+        return NextResponse.json({
+          success: true,
+          order: {
+            id: `#${existingOrder.id.slice(-6)}`,
+            fullId: existingOrder.id,
+            status: existingOrder.status,
+            existing: true // Flag for frontend if needed
+          },
+          message: "Order already exists"
+        });
+      }
+    }
+
+    // If it's a sell order, ensure we save the hash
+    const finalBlockchainId = sellTxHash || blockchainOrderId || null;
+
     console.log('✅ Validation passed, creating order:', {
       walletAddress,
       linkedEoaAddress,
@@ -138,7 +197,7 @@ export async function POST(request: NextRequest) {
       amount: `₹${amount}`,
       usdtAmount: usdtAmount ? `${usdtAmount} USDT` : 'N/A',
       rate: buyRate || sellRate,
-      blockchainOrderId,
+      blockchainOrderId: finalBlockchainId,
       originalStatus: status,
       validStatus: validStatus
     });

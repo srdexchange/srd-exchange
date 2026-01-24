@@ -549,6 +549,8 @@ export default function BuySellSection() {
     finalUsdtAmount: string,
     rate: number
   ) => {
+    let txHash: string | null = null;
+
     try {
       console.log('🚀 Starting gasless sell order creation:', {
         orderType,
@@ -564,7 +566,7 @@ export default function BuySellSection() {
 
       // Send USDT directly to admin using gasless transfer
       console.log('💸 Initiating gasless USDT transfer to admin wallet...');
-      const txHash = await sendGaslessUSDT(
+      txHash = await sendGaslessUSDT(
         ADMIN_WALLET_ADDRESS,
         finalUsdtAmount,
         usdtDecimals
@@ -572,19 +574,10 @@ export default function BuySellSection() {
 
       console.log('✅ Gasless USDT transfer successful:', txHash);
 
-      // Wait for transaction confirmation with retry logic
-      console.log('⏳ Waiting for transaction confirmation...');
-      const isConfirmed = await waitForTransactionConfirmation(txHash);
+      // CRITICAL: Create database order IMMEDIATELY after getting hash
+      // This ensures we capture the order even if confirmation times out
+      console.log('📝 Creating database order immediately with transaction hash...');
 
-      if (!isConfirmed) {
-        throw new Error(
-          'Transaction confirmation failed. Your USDT transfer may still be pending. Please check BscScan and contact support if needed.'
-        );
-      }
-
-      console.log('📝 Creating database order after confirmed USDT transfer...');
-
-      // Create database order with retry logic
       const orderPayload = {
         walletAddress: address,
         orderType: orderType,
@@ -599,8 +592,33 @@ export default function BuySellSection() {
         linkedEoaAddress: eoaAddress, // Link Smart Wallet to EOA user
       };
 
-      const databaseOrder = await createDatabaseOrderWithRetry(orderPayload);
-      console.log('✅ Sell order created - USDT transferred to admin via gasless transaction');
+      // Create database order with retry logic
+      // We explicitly catch errors here to ensure we don't lose the txHash context
+      let databaseOrder;
+      try {
+        databaseOrder = await createDatabaseOrderWithRetry(orderPayload);
+        console.log('✅ Sell order created - USDT transferred to admin via gasless transaction');
+      } catch (dbError) {
+        console.error('❌ Database creation failed but Transaction Sent:', txHash, dbError);
+        const errMessage = dbError instanceof Error ? dbError.message : String(dbError);
+        // Throw a specific error that includes the hash so the user can save it
+        throw new Error(`CRITICAL: Transaction sent (Hash: ${txHash}) but Order creation failed. Please contact support with this hash. Error: ${errMessage}`);
+      }
+
+      // Wait for transaction confirmation (for UI feedback)
+      // We don't block the success flow if this times out, as the order is already safe in DB
+      console.log('⏳ Waiting for transaction confirmation...');
+      try {
+        const isConfirmed = await waitForTransactionConfirmation(txHash!);
+
+        if (!isConfirmed) {
+          console.warn('⚠️ Transaction confirmation timed out or check failed');
+          // Optional: You could update the order status via API here if you had an endpoint
+          // But leaving it as PENDING_ADMIN_PAYMENT is safe.
+        }
+      } catch (confirmError) {
+        console.warn('⚠️ Confirmation check error (ignoring to prevent order loss):', confirmError);
+      }
 
       await Promise.all([refetchOrders(), refetchBalances()]);
       return databaseOrder;
@@ -611,7 +629,10 @@ export default function BuySellSection() {
       const errorMessage =
         sellError instanceof Error ? sellError.message : String(sellError);
 
-      if (errorMessage.includes('Insufficient USDT balance')) {
+      if (errorMessage.includes('CRITICAL')) {
+        // Pass through our critical error as-is
+        throw sellError;
+      } else if (errorMessage.includes('Insufficient USDT balance')) {
         throw new Error(
           'Insufficient USDT balance. Please ensure you have enough USDT for this order.'
         );
@@ -891,6 +912,8 @@ export default function BuySellSection() {
         // Set current order for modal
         setCurrentOrder(order);
 
+        console.log("🛠️ Opening modal for order type:", activeTab, paymentMethod, order.id);
+
         // Save initial modal state and open appropriate modal
         if (activeTab === "buy" && paymentMethod === "cdm") {
           saveModalState(order.fullId || order.id, "BUY_CDM", 0, {}, null);
@@ -902,8 +925,13 @@ export default function BuySellSection() {
           saveModalState(order.fullId || order.id, "SELL_UPI", 0, {}, null);
           setShowSellUPIModal(true);
         } else if (activeTab === "sell" && paymentMethod === "cdm") {
-          saveModalState(order.fullId || order.id, "SELL_CDM", 0, {}, null);
-          setShowSellCDMModal(true);
+          if (order.id || order.fullId) {
+            saveModalState(order.fullId || order.id, "SELL_CDM", 0, {}, null);
+            setShowSellCDMModal(true);
+          } else {
+            console.error("❌ Critical: Created SELL_CDM order but ID is missing!", order);
+            alert("Order created but ID missing. Please refresh.");
+          }
         }
 
         // Reset form

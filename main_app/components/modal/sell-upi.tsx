@@ -56,18 +56,18 @@ export default function SellUPIModal({
     if (orderData.orderType && orderData.orderType.includes('SELL')) {
       // For sell orders from database: orderData.usdtAmount is what user is selling
       displayUsdtAmount = orderData.usdtAmount ? orderData.usdtAmount.toString() : usdtAmount || '0';
-      
+
       // Get the current sell rate from API - same logic as buysellSection.tsx
       const currentPaymentMethod = paymentMethod === 'CDM' ? 'CDM' : 'UPI';
       currentRate = getSellRate ? getSellRate(currentPaymentMethod) : (paymentMethod === 'UPI' ? 92.5 : 92.0);
-      
+
       // Calculate rupees using the same method as buysellSection.tsx
       if (orderData.usdtAmount && currentRate > 0) {
         displayRupeeAmount = calculateRupeeFromUSDT(orderData.usdtAmount.toString(), currentRate);
       } else {
         displayRupeeAmount = amount || '0';
       }
-        
+
       console.log('📊 UPI Sell Modal - Calculated amounts:', {
         displayUsdtAmount,
         displayRupeeAmount,
@@ -86,10 +86,10 @@ export default function SellUPIModal({
       currentRate = usdtNum > 0 ? amountNum / usdtNum : 92.5;
     }
   } else {
- 
+
     displayUsdtAmount = usdtAmount || '0';
-    displayRupeeAmount = amount || '0';    
-    
+    displayRupeeAmount = amount || '0';
+
     // Get current rate for display
     const currentPaymentMethod = 'UPI';
     currentRate = getSellRate ? getSellRate(currentPaymentMethod) : 92.5;
@@ -115,109 +115,109 @@ export default function SellUPIModal({
 
   // In both sell-cdm.tsx and sell-upi.tsx, update the handleMoneyReceived function:
 
-const handleMoneyReceived = async () => {
-  try {
-    console.log('🔗 Completing sell order on blockchain...');
-    if (orderData?.blockchainOrderId) {
-      await completeSellOrderOnChain(parseInt(orderData.blockchainOrderId));
-    }
-    setIsMoneyReceived(true);
-    setIsCoinSent(true);
-    
-    // 🔥 CRITICAL: Update database to mark user has confirmed receiving money
-    if (orderData) {
-      try {
-        console.log(
-          '💾 Updating database - user confirmed money received for order:',
-          orderData.fullId || orderData.id
-        );
-        
-        const response = await fetch(
-          `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userConfirmedReceived: true,
-              userConfirmedAt: new Date().toISOString(),
-            }),
-          }
-        );
+  const handleMoneyReceived = async () => {
+    try {
+      console.log('🔗 Completing sell order on blockchain...');
+      if (orderData?.blockchainOrderId) {
+        await completeSellOrderOnChain(parseInt(orderData.blockchainOrderId));
+      }
+      setIsMoneyReceived(true);
+      setIsCoinSent(true);
 
-        const result = await response.json();
-        
-        if (result.success) {
-          console.log('✅ Database updated - user confirmed money received');
-          
-          // 🔥 BROADCAST: Notify admin center to refresh orders
-          window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
-            detail: { 
-              orderId: orderData.fullId || orderData.id, 
-              action: 'userConfirmedReceived',
-              userConfirmedReceived: true
-            },
-            bubbles: true,
-            cancelable: true
-          }));
-          
-        } else {
-          console.error('❌ Failed to update database:', result.error);
-          alert('Failed to update order status. Please try again.');
+      // 🔥 CRITICAL: Update database to mark user has confirmed receiving money
+      if (orderData) {
+        try {
+          console.log(
+            '💾 Updating database - user confirmed money received for order:',
+            orderData.fullId || orderData.id
+          );
+
+          const response = await fetch(
+            `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userConfirmedReceived: true,
+                userConfirmedAt: new Date().toISOString(),
+              }),
+            }
+          );
+
+          const result = await response.json();
+
+          if (result.success) {
+            console.log('✅ Database updated - user confirmed money received');
+
+            // 🔥 BROADCAST: Notify admin center to refresh orders
+            window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
+              detail: {
+                orderId: orderData.fullId || orderData.id,
+                action: 'userConfirmedReceived',
+                userConfirmedReceived: true
+              },
+              bubbles: true,
+              cancelable: true
+            }));
+
+          } else {
+            console.error('❌ Failed to update database:', result.error);
+            alert('Failed to update order status. Please try again.');
+          }
+        } catch (dbError) {
+          console.error('❌ Database update error:', dbError);
+          alert('Failed to connect to database. Please try again.');
         }
-      } catch (dbError) {
-        console.error('❌ Database update error:', dbError);
-        alert('Failed to connect to database. Please try again.');
+      }
+
+      console.log("💰 Money Received on Account clicked");
+    } catch (error) {
+      console.error('❌ Error completing sell order on blockchain:', error);
+      setIsMoneyReceived(true);
+      setIsCoinSent(true);
+
+      // Still try to update database even if blockchain operation fails
+      if (orderData) {
+        try {
+          const response = await fetch(
+            `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userConfirmedReceived: true,
+                userConfirmedAt: new Date().toISOString(),
+              }),
+            }
+          );
+
+          const result = await response.json();
+          if (result.success) {
+            console.log('✅ Database updated despite blockchain error');
+
+            // Broadcast database update event
+            window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
+              detail: {
+                orderId: orderData.fullId || orderData.id,
+                action: 'userConfirmedReceived',
+                userConfirmedReceived: true
+              },
+              bubbles: true,
+              cancelable: true
+            }));
+          }
+        } catch (dbError) {
+          console.error('❌ Database update failed:', dbError);
+        }
       }
     }
-    
-    console.log("💰 Money Received on Account clicked");
-  } catch (error) {
-    console.error('❌ Error completing sell order on blockchain:', error);
-    setIsMoneyReceived(true);
-    setIsCoinSent(true);
-    
-    // Still try to update database even if blockchain operation fails
-    if (orderData) {
-      try {
-        const response = await fetch(
-          `/api/orders/${orderData.fullId || orderData.id}/confirm-received`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userConfirmedReceived: true,
-              userConfirmedAt: new Date().toISOString(),
-            }),
-          }
-        );
+  };
 
-        const result = await response.json();
-        if (result.success) {
-          console.log('✅ Database updated despite blockchain error');
-          
-          // Broadcast database update event
-          window.dispatchEvent(new CustomEvent('orderDatabaseUpdated', {
-            detail: { 
-              orderId: orderData.fullId || orderData.id, 
-              action: 'userConfirmedReceived',
-              userConfirmedReceived: true
-            },
-            bubbles: true,
-            cancelable: true
-          }));
-        }
-      } catch (dbError) {
-        console.error('❌ Database update failed:', dbError);
-      }
-    }
-  }
-};
 
-  const orderDisplayId = orderData ? `Order ${orderData.id || orderData.fullId?.slice(-6) || '14'}` : 'Order 14';
 
   return (
     <AnimatePresence>
@@ -245,10 +245,13 @@ const handleMoneyReceived = async () => {
           >
             <div className="flex items-center justify-between p-3 border-b border-[#2F2F2F]">
               <div className="flex items-center space-x-3">
-                <div className={`w-3 h-3 rounded-full ${
-                  isMoneyReceived ? "bg-gray-400" : isWaitingConfirmation ? "bg-green-400" : "bg-yellow-400"
-                }`}></div>
-                <span className="text-white font-medium">{orderDisplayId}</span>
+                <div className={`w-3 h-3 rounded-full ${isMoneyReceived ? "bg-gray-400" : isWaitingConfirmation ? "bg-green-400" : "bg-yellow-400"
+                  }`}></div>
+                <span className="text-white font-medium">
+                  {orderData
+                    ? (orderData.id || `Order ${orderData.fullId?.slice(-6) || "..."}`)
+                    : "Processing Order..."}
+                </span>
               </div>
 
               <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2 space-x-1 justify-center items-center text-white text-sm">
@@ -267,15 +270,15 @@ const handleMoneyReceived = async () => {
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
                     {parseFloat(displayUsdtAmount || '0').toFixed(4)} USDT
                   </div>
-                  
+
                   <div className="text-2xl md:text-2xl font-medium text-green-400 mb-2">
                     You'll receive ₹{parseFloat(displayRupeeAmount || '0').toFixed(2)}
                   </div>
-                  
+
                   <div className="text-xs text-gray-400 mb-2">
                     Selling {parseFloat(displayUsdtAmount || '0').toFixed(4)} USDT • Getting ₹{parseFloat(displayRupeeAmount || '0').toFixed(2)} INR
                   </div>
-                  
+
                   {/* Rate Display - Show current API rate with safe formatting */}
                   <div className="text-xs text-gray-500 mb-2">
                     {ratesLoading ? (
@@ -354,12 +357,12 @@ const handleMoneyReceived = async () => {
                     <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
                       <div className="bg-[#622DBF] h-2 rounded-full w-3/4"></div>
                     </div>
-                    
+
                   </div>
                 )}
 
                 <div className="px-4 md:px-0">
-       
+
                   {isWaitingConfirmation && !isMoneyReceived && (
                     <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                       <div className="text-sm text-red-400 font-medium text-center">
@@ -367,14 +370,14 @@ const handleMoneyReceived = async () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <button
                     onClick={
                       isMoneyReceived
-                        ? onClose 
+                        ? onClose
                         : isWaitingConfirmation
-                        ? handleMoneyReceived
-                        : handleWaitingConfirmation
+                          ? handleMoneyReceived
+                          : handleWaitingConfirmation
                     }
                     className="w-full py-3 rounded-lg font-bold text-white transition-all bg-[#622DBF] hover:bg-purple-700"
                   >
