@@ -605,22 +605,30 @@ export default function BuySellSection() {
         throw new Error(`CRITICAL: Transaction sent (Hash: ${txHash}) but Order creation failed. Please contact support with this hash. Error: ${errMessage}`);
       }
 
-      // Wait for transaction confirmation (for UI feedback)
-      // We don't block the success flow if this times out, as the order is already safe in DB
-      console.log('⏳ Waiting for transaction confirmation...');
-      try {
-        const isConfirmed = await waitForTransactionConfirmation(txHash!);
+      // Wait for transaction confirmation (Background process to not block UI)
+      // The order is already safe in DB, so we return immediately to update UI
+      console.log('⏳ Transaction sent. Waiting for confirmation in background...');
 
-        if (!isConfirmed) {
-          console.warn('⚠️ Transaction confirmation timed out or check failed');
-          // Optional: You could update the order status via API here if you had an endpoint
-          // But leaving it as PENDING_ADMIN_PAYMENT is safe.
-        }
-      } catch (confirmError) {
-        console.warn('⚠️ Confirmation check error (ignoring to prevent order loss):', confirmError);
-      }
+      // Start confirmation check in background without awaiting
+      waitForTransactionConfirmation(txHash!)
+        .then(isConfirmed => {
+          if (isConfirmed) {
+            console.log('✅ Background: Transaction confirmed on chain');
+            // Refresh balances again after confirmation to ensure accurate wallet state
+            refetchBalances();
+          } else {
+            console.warn('⚠️ Background: Transaction confirmation timed out or check failed');
+          }
+        })
+        .catch(confirmError => {
+          console.warn('⚠️ Background: Confirmation check error:', confirmError);
+        });
 
-      await Promise.all([refetchOrders(), refetchBalances()]);
+      // Immediately refresh orders since DB entry is created
+      await refetchOrders();
+      // Trigger balance refresh (might be stale until block confirms, but good to trigger)
+      refetchBalances();
+
       return databaseOrder;
 
     } catch (sellError) {
