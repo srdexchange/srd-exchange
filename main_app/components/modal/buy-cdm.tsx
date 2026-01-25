@@ -246,16 +246,16 @@ export default function BuyCDMModal({
       const currentStepValue = isOrderComplete
         ? 5
         : isUploadComplete
-        ? 4
-        : isPaid
-        ? 3
-        : isWaitingConfirmation
-        ? 2
-        : isUpiPaid
-        ? 1
-        : isUpiPaymentStep
-        ? 1
-        : 0;
+          ? 4
+          : isPaid
+            ? 3
+            : isWaitingConfirmation
+              ? 2
+              : isUpiPaid
+                ? 1
+                : isUpiPaymentStep
+                  ? 1
+                  : 0;
       setCurrentStep(currentStepValue);
 
       console.log("💾 Saving CDM modal state:", {
@@ -432,7 +432,7 @@ export default function BuyCDMModal({
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="bg-[#111010] rounded-t-xl md:rounded-xl max-w-4xl w-full relative overflow-hidden max-h-[90vh] md:max-h-[90vh]"
+            className="bg-[#111010] rounded-t-xl md:rounded-xl max-w-4xl w-full relative overflow-hidden max-h-[85vh] md:max-h-[90vh]"
             initial={{
               scale:
                 typeof window !== "undefined" && window.innerWidth < 768
@@ -471,15 +471,14 @@ export default function BuyCDMModal({
             <div className="flex items-center justify-between p-3 border-b border-[#2F2F2F]">
               <div className="flex items-center space-x-3">
                 <div
-                  className={`w-3 h-3 rounded-full ${
-                    isOrderComplete
-                      ? "bg-gray-400"
-                      : isUploadComplete
+                  className={`w-3 h-3 rounded-full ${isOrderComplete
+                    ? "bg-gray-400"
+                    : isUploadComplete
                       ? "bg-green-400"
                       : hasReceivedAdminDetails
-                      ? "bg-blue-400"
-                      : "bg-yellow-400"
-                  }`}
+                        ? "bg-blue-400"
+                        : "bg-yellow-400"
+                    }`}
                 ></div>
                 <span className="text-white font-medium">
                   Order {orderData?.id || orderData?.fullId?.slice(-6) || "#14"}
@@ -499,7 +498,7 @@ export default function BuyCDMModal({
               </button>
             </div>
 
-            <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
+            <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)] pb-32">
               <div className="p-4 text-center">
                 {isLoadingPaymentDetails && !paymentDetails?.adminUpiId && (
                   <motion.div
@@ -599,8 +598,8 @@ export default function BuyCDMModal({
                     {!isUpiPaid
                       ? "₹500"
                       : hasReceivedAdminDetails && paymentDetails?.customAmount
-                      ? `₹${paymentDetails.customAmount}`
-                      : `₹${displayAmount}`}
+                        ? `₹${paymentDetails.customAmount}`
+                        : `₹${displayAmount}`}
                   </div>
 
                   {hasReceivedAdminDetails && isUpiPaid && (
@@ -608,9 +607,9 @@ export default function BuyCDMModal({
                       ≈{" "}
                       {paymentDetails?.customAmount
                         ? calculateUSDTFromINR(
-                            paymentDetails.customAmount,
-                            "CDM"
-                          )
+                          paymentDetails.customAmount,
+                          "CDM"
+                        )
                         : usdtAmount}{" "}
                       USDT
                     </div>
@@ -627,7 +626,7 @@ export default function BuyCDMModal({
                     paymentDetails.originalAmount &&
                     Math.abs(
                       paymentDetails.customAmount -
-                        paymentDetails.originalAmount
+                      paymentDetails.originalAmount
                     ) > 0.01 && (
                       <div className="text-sm text-green-400 font-normal mb-2">
                         ✨ Custom amount set by admin (Original: ₹
@@ -640,9 +639,9 @@ export default function BuyCDMModal({
                       You will receive{" "}
                       {paymentDetails?.customAmount
                         ? calculateUSDTFromINR(
-                            paymentDetails.customAmount,
-                            "CDM"
-                          )
+                          paymentDetails.customAmount,
+                          "CDM"
+                        )
                         : usdtAmount}{" "}
                       USDT for ₹{paymentDetails?.customAmount || displayAmount}
                     </div>
@@ -679,8 +678,8 @@ export default function BuyCDMModal({
                   <span className="text-white px-2 py-1 bg-[#1D1C1C] rounded-md text-sm">
                     {orderData
                       ? new Date(
-                          orderData.createdAt || Date.now()
-                        ).toLocaleTimeString()
+                        orderData.createdAt || Date.now()
+                      ).toLocaleTimeString()
                       : "Today 11:40 PM"}
                   </span>
                 </div>
@@ -816,11 +815,10 @@ export default function BuyCDMModal({
                       </p>
                     </motion.div>
                     <div
-                      className={`rounded-xl p-6 mx-auto max-w-2xl ${
-                        hasReceivedAdminDetails
-                          ? "bg-[#1a1a1a]"
-                          : "bg-[#1a1a1a]/50 border border-dashed border-gray-600"
-                      }`}
+                      className={`rounded-xl p-6 mx-auto max-w-2xl ${hasReceivedAdminDetails
+                        ? "bg-[#1a1a1a]"
+                        : "bg-[#1a1a1a]/50 border border-dashed border-gray-600"
+                        }`}
                     >
                       <div className="flex items-center justify-center space-x-2 mb-6">
                         <Building className="w-6 h-6 text-purple-400" />
@@ -1014,41 +1012,40 @@ export default function BuyCDMModal({
                 <div className="flex flex-col items-center mb-8">
                   <div className="w-60 md:w-80 bg-gray-700 rounded-full h-2 mb-2">
                     <div
-                      className={`h-2 rounded-full transition-all duration-500 ${
-                        isOrderComplete
-                          ? "w-full bg-green-500"
-                          : isUploadComplete
+                      className={`h-2 rounded-full transition-all duration-500 ${isOrderComplete
+                        ? "w-full bg-green-500"
+                        : isUploadComplete
                           ? "w-5/6 bg-green-500"
                           : isPaid
-                          ? "w-4/6 bg-green-500"
-                          : isWaitingConfirmation
-                          ? "w-3/6 bg-green-500"
-                          : isUpiPaid && hasReceivedAdminDetails
-                          ? "w-2/6 bg-blue-500"
-                          : isUpiPaid
-                          ? "w-2/6 bg-green-500"
-                          : paymentDetails?.adminUpiId
-                          ? "w-1/6 bg-blue-500"
-                          : "w-1/12 bg-yellow-500"
-                      }`}
+                            ? "w-4/6 bg-green-500"
+                            : isWaitingConfirmation
+                              ? "w-3/6 bg-green-500"
+                              : isUpiPaid && hasReceivedAdminDetails
+                                ? "w-2/6 bg-blue-500"
+                                : isUpiPaid
+                                  ? "w-2/6 bg-green-500"
+                                  : paymentDetails?.adminUpiId
+                                    ? "w-1/6 bg-blue-500"
+                                    : "w-1/12 bg-yellow-500"
+                        }`}
                     ></div>
                   </div>
                   <div className="text-white text-sm font-medium">
                     {isOrderComplete
                       ? "Order Complete"
                       : isUploadComplete
-                      ? "Receipt Uploaded"
-                      : isPaid
-                      ? "CDM Payment Confirmed"
-                      : isWaitingConfirmation
-                      ? "Processing CDM Transfer"
-                      : isUpiPaid && hasReceivedAdminDetails
-                      ? "Ready for CDM Transfer"
-                      : isUpiPaid
-                      ? "UPI Verified - Waiting for Bank Details"
-                      : paymentDetails?.adminUpiId
-                      ? "UPI Verification Required"
-                      : "Waiting for Admin UPI ID"}
+                        ? "Receipt Uploaded"
+                        : isPaid
+                          ? "CDM Payment Confirmed"
+                          : isWaitingConfirmation
+                            ? "Processing CDM Transfer"
+                            : isUpiPaid && hasReceivedAdminDetails
+                              ? "Ready for CDM Transfer"
+                              : isUpiPaid
+                                ? "UPI Verified - Waiting for Bank Details"
+                                : paymentDetails?.adminUpiId
+                                  ? "UPI Verification Required"
+                                  : "Waiting for Admin UPI ID"}
                   </div>
                 </div>
 
@@ -1058,14 +1055,14 @@ export default function BuyCDMModal({
                       isOrderComplete
                         ? handleOrderComplete
                         : isUploadComplete
-                        ? handleCoinReceived
-                        : isWaitingConfirmation || isPaid
-                        ? handleUploadDetails
-                        : isUpiPaid && hasReceivedAdminDetails
-                        ? handlePaymentConfirm
-                        : paymentDetails?.adminUpiId && !isUpiPaid
-                        ? handleUpiPaymentConfirm
-                        : undefined
+                          ? handleCoinReceived
+                          : isWaitingConfirmation || isPaid
+                            ? handleUploadDetails
+                            : isUpiPaid && hasReceivedAdminDetails
+                              ? handlePaymentConfirm
+                              : paymentDetails?.adminUpiId && !isUpiPaid
+                                ? handleUpiPaymentConfirm
+                                : undefined
                     }
                     disabled={
                       (!paymentDetails?.adminUpiId &&
@@ -1075,16 +1072,15 @@ export default function BuyCDMModal({
                         !isOrderComplete) ||
                       (isUpiPaid && !hasReceivedAdminDetails)
                     }
-                    className={`w-full py-3 rounded-lg font-bold text-white transition-all ${
-                      (paymentDetails?.adminUpiId ||
-                        isUpiPaid ||
-                        isPaid ||
-                        isUploadComplete ||
-                        isOrderComplete) &&
+                    className={`w-full py-3 rounded-lg font-bold text-white transition-all ${(paymentDetails?.adminUpiId ||
+                      isUpiPaid ||
+                      isPaid ||
+                      isUploadComplete ||
+                      isOrderComplete) &&
                       !(isUpiPaid && !hasReceivedAdminDetails)
-                        ? "bg-[#622DBF] hover:bg-purple-700 cursor-pointer"
-                        : "bg-gray-600 cursor-not-allowed opacity-50"
-                    }`}
+                      ? "bg-[#622DBF] hover:bg-purple-700 cursor-pointer"
+                      : "bg-gray-600 cursor-not-allowed opacity-50"
+                      }`}
                   >
                     <div className="flex items-center justify-center space-x-2">
                       {isOrderComplete ? (

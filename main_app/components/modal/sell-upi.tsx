@@ -229,7 +229,7 @@ export default function SellUPIModal({
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="bg-[#111010] rounded-t-xl md:rounded-xl max-w-4xl w-full relative overflow-hidden max-h-[90vh] md:max-h-[90vh]"
+            className="bg-[#111010] rounded-t-xl md:rounded-xl max-w-4xl w-full relative overflow-hidden max-h-[85vh] md:max-h-[90vh]"
             initial={{
               scale: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0.9,
               opacity: typeof window !== "undefined" && window.innerWidth < 768 ? 1 : 0,
@@ -264,7 +264,7 @@ export default function SellUPIModal({
               </button>
             </div>
 
-            <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)]">
+            <div className="overflow-y-auto max-h-[calc(90vh-80px)] md:max-h-[calc(90vh-80px)] pb-32">
               <div className="p-4 text-center">
                 <div className="mb-6">
                   <div className="text-4xl md:text-4xl font-bold text-white mb-2">
