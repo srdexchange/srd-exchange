@@ -4,7 +4,11 @@ import { bsc } from 'viem/chains';
 // Comprehensive list of BSC RPC endpoints, ordered by reliability
 // NodeReal is prioritized as the primary endpoint for faster performance
 const BSC_RPC_ENDPOINTS = [
-    'https://bsc-mainnet.nodereal.io/v1/9df36507ccc648d6984534b84c99cc1b', // NodeReal (Premium)
+    'https://bsc-dataseed.bnbchain.org',
+    'https://bsc-dataseed1.defibit.io',
+    'https://bsc-dataseed1.ninicoin.io',
+    'https://1rpc.io/bnb',
+    // 'https://bsc-mainnet.nodereal.io/v1/9df36507ccc648d6984534b84c99cc1b', // NodeReal (Premium) - Quota Exceeded
 ];
 
 interface RPCEndpointHealth {
