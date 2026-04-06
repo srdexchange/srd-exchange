@@ -5,9 +5,10 @@ import '@/lib/particlePolyfills';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ParticleConnectkit } from '@/lib/connectkit';
-import { useSmartAccount } from '@particle-network/connectkit';
+import { useAccount } from '@particle-network/connectkit';
+import { particleAuth } from '@particle-network/auth-core';
 import FontProvider from './FontProvider';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { SidebarProvider, useSidebar } from '@/context/SidebarContext';
 import RightSidebar from './RightSidebar';
 import { useWalletManager } from '@/hooks/useWalletManager';
@@ -24,8 +25,9 @@ const queryClient = new QueryClient({
 
 function SidebarWrapper({ children }: { children: ReactNode }) {
   const { isSidebarOpen, setIsSidebarOpen } = useSidebar();
-  const { address, walletData, refetchBalances } = useWalletManager();
-  const smartAccount = useSmartAccount();
+  const { walletData, refetchBalances } = useWalletManager();
+  const { isConnected } = useAccount();
+  const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
 
   // Refetch balances when sidebar opens
   useEffect(() => {
@@ -33,6 +35,26 @@ function SidebarWrapper({ children }: { children: ReactNode }) {
       refetchBalances();
     }
   }, [isSidebarOpen, refetchBalances]);
+
+  // Fetch Solana address once connected
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 10000)
+    );
+    Promise.race([particleAuth.solana.connect(), timeout])
+      .then(async () => {
+        try {
+          const pubKey = await particleAuth.solana.publicKey();
+          if (pubKey) setSolanaAddress(pubKey.toBase58());
+        } catch {
+          const addr = particleAuth.solana.selectedAddress;
+          if (addr) setSolanaAddress(addr);
+        }
+      })
+      .catch(() => {});
+  }, [isConnected]);
 
   // Always use smart wallet address - no EOA fallback
   const smartAddress = walletData?.smartWallet?.address;
@@ -46,8 +68,8 @@ function SidebarWrapper({ children }: { children: ReactNode }) {
         <RightSidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
-          address={smartAddress || undefined}
           smartWalletAddress={smartAddress}
+          solanaAddress={solanaAddress}
           userBalances={null}
         />
       </>
@@ -60,8 +82,8 @@ function SidebarWrapper({ children }: { children: ReactNode }) {
       <RightSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        address={smartAddress || undefined}
         smartWalletAddress={smartAddress}
+        solanaAddress={solanaAddress}
         userBalances={{
           usdt: displayUsdtBalance,
           inr: "0"

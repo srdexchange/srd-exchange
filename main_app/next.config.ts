@@ -10,11 +10,11 @@ const nextConfig = {
     ],
   },
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    config.externals.push("pino-pretty", "lokijs", "encoding");
 
     config.watchOptions = {
       ignored: ['../contracts/**', '../artifacts/**', '../cache/**']
     };
-
 
     if (!isServer) {
       config.resolve.fallback = {

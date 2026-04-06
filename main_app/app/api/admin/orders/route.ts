@@ -1,31 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { OrderStatus } from '@prisma/client'
+import { verifyAdminAccess } from '@/lib/admin-middleware'
 
 // GET - Fetch orders for admin (with filtering)
 export async function GET(request: NextRequest) {
     try {
-        // Get admin wallet address from header
-        const adminWalletAddress = request.headers.get('x-wallet-address')
-
-        if (!adminWalletAddress) {
-            return NextResponse.json(
-                { success: false, error: 'Admin authentication required' },
-                { status: 401 }
-            )
-        }
-
-        // Verify admin status
-        const adminUser = await prisma.user.findUnique({
-            where: { walletAddress: adminWalletAddress.toLowerCase() }
-        })
-
-        if (!adminUser || adminUser.role !== 'ADMIN') {
-            return NextResponse.json(
-                { success: false, error: 'Admin privileges required' },
-                { status: 403 }
-            )
-        }
+        const authResult = await verifyAdminAccess(request)
+        if (authResult instanceof NextResponse) return authResult
 
         // Get query parameters
         const { searchParams } = new URL(request.url)

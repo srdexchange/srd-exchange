@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "@particle-network/connectkit";
+import { particleAuth } from "@particle-network/auth-core";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -39,6 +40,7 @@ export default function CompleteProfilePage() {
     accountHolderName: "",
   });
 
+  const [solanaAddress, setSolanaAddress] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,27 @@ export default function CompleteProfilePage() {
     }
   }, [isConnected, address, router]);
 
+  // Silently generate and fetch Solana address
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 10000)
+    );
+
+    Promise.race([particleAuth.solana.connect(), timeout])
+      .then(async () => {
+        try {
+          const pubKey = await particleAuth.solana.publicKey();
+          if (pubKey) setSolanaAddress(pubKey.toBase58());
+        } catch {
+          const addr = particleAuth.solana.selectedAddress;
+          if (addr) setSolanaAddress(addr);
+        }
+      })
+      .catch(() => setSolanaAddress(null));
+  }, [isConnected]);
+
   const handleBankDetailsChange = (field: keyof BankDetails, value: string) => {
     setBankDetails(prev => ({
       ...prev,
@@ -178,7 +201,7 @@ export default function CompleteProfilePage() {
         const regRes = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ walletAddress: address }),
+          body: JSON.stringify({ walletAddress: address, solanaAddress }),
         });
         if (regRes.ok) {
           // Retry profile completion
