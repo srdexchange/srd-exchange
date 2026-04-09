@@ -3,7 +3,7 @@
 import { Search, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useAccount } from '@particle-network/connectkit';
+import { useAdminSession } from '@/hooks/useAdminSession';
 import { useAdminAPI } from '@/hooks/useAdminAPI';
 import { useUserActivity } from '@/hooks/useUserActivity';
 import { useRates } from '@/hooks/useRates';
@@ -40,7 +40,7 @@ export default function AdminLeftSide() {
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
 
-  const { address } = useAccount();
+  const { address } = useAdminSession();
   const { makeAdminRequest } = useAdminAPI();
   const isUserActive = useUserActivity(5000);
   const { getBuyRate, getSellRate } = useRates();

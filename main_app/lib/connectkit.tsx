@@ -1,11 +1,20 @@
 'use client';
 
 import './particlePolyfills';
-import { SmartAccount } from '@particle-network/aa';
 import { ConnectKitProvider, createConfig } from '@particle-network/connectkit';
 import { authWalletConnectors } from '@particle-network/connectkit/auth';
-import { bsc, mainnet } from '@particle-network/connectkit/chains';
-import { evmWalletConnectors } from '@particle-network/connectkit/evm';
+import {
+  bsc,
+  mainnet,
+  base,
+  arbitrum,
+  optimism,
+  polygon,
+  avalanche,
+  scroll,
+  cronos,
+  solana,
+} from '@particle-network/connectkit/chains';
 import { wallet, EntryPosition } from '@particle-network/connectkit/wallet';
 import React from 'react';
 import { particleAuth } from '@particle-network/auth-core';
@@ -14,7 +23,7 @@ import { aa } from "@particle-network/connectkit/aa";
 let projectId = process.env.NEXT_PUBLIC_PROJECT_ID as string;
 let clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY as string;
 let appId = process.env.NEXT_PUBLIC_APP_ID as string;
-const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID as string;
+
 
 
 // Validate environment variables
@@ -88,11 +97,22 @@ const config = createConfig({
   projectId,
   clientKey,
   appId,
-  chains: [bscWithCustomRPC],
+  chains: [
+    bscWithCustomRPC,
+    mainnet,
+    base,
+    arbitrum,
+    optimism,
+    polygon,
+    avalanche,
+    scroll,
+    cronos,
+    solana,
+  ],
   appearance: {
     splitEmailAndPhone: false,
     collapseWalletList: false,
-    connectorsOrder: ['email', 'phone', 'social', 'wallet', 'passkey'],
+    connectorsOrder: ['email', 'phone', 'social'],
     language: 'en-US',
     mode: 'dark',
     theme: {
@@ -108,16 +128,6 @@ const config = createConfig({
   },
 
   walletConnectors: [
-    evmWalletConnectors({
-      metadata: {
-        name: 'SRD Exchange',
-        icon: '/srd_final.svg',
-        description: 'Secure P2P USDT Trading Platform',
-        url: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      },
-      walletConnectProjectId: walletConnectProjectId,
-      multiInjectedProviderDiscovery: true,
-    }),
     authWalletConnectors({
       // Social/email/phone login providers shown in the ConnectKit modal
       authTypes: [

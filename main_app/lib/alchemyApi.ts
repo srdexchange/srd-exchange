@@ -1,122 +1,127 @@
-// Alchemy API helper for fetching USDT transaction history
-// This uses Alchemy's optimized getAssetTransfers API instead of manual log queries
+// Multi-chain transaction history using Alchemy (EVM) + Solana public RPC
 
-export async function fetchTransactionHistoryAlchemy(userAddress: string): Promise<any[]> {
+const ALCHEMY_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY || 'demo';
+
+const ALCHEMY_CHAINS = [
+    { id: 56,     name: 'BNB Chain', rpc: `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,      explorer: 'https://bscscan.com/tx/',             logo: 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',                                                                           color: '#F3BA2F' },
+    { id: 1,      name: 'Ethereum',  rpc: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,      explorer: 'https://etherscan.io/tx/',             logo: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',                                                                               color: '#627EEA' },
+    { id: 8453,   name: 'Base',      rpc: `https://base-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,     explorer: 'https://basescan.org/tx/',             logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',                                                     color: '#0052FF' },
+    { id: 42161,  name: 'Arbitrum',  rpc: `https://arb-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,     explorer: 'https://arbiscan.io/tx/',              logo: 'https://assets.coingecko.com/coins/images/16547/small/arb.jpg',                                                                                  color: '#28A0F0' },
+    { id: 10,     name: 'Optimism',  rpc: `https://opt-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,     explorer: 'https://optimistic.etherscan.io/tx/',  logo: 'https://assets.coingecko.com/coins/images/25244/small/Optimism.png',                                                                            color: '#FF0420' },
+    { id: 137,    name: 'Polygon',   rpc: `https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`, explorer: 'https://polygonscan.com/tx/',           logo: 'https://assets.coingecko.com/coins/images/4713/small/polygon.png',                                                                               color: '#8247E5' },
+    { id: 43114,  name: 'Avalanche', rpc: `https://avax-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,    explorer: 'https://snowtrace.io/tx/',             logo: 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',                                                      color: '#E84142' },
+    { id: 534352, name: 'Scroll',    rpc: `https://scroll-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,  explorer: 'https://scrollscan.com/tx/',           logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/scroll/info/logo.png',                                                                               color: '#FFDBB1' },
+    { id: 25,     name: 'Cronos',    rpc: `https://cronos-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}`,  explorer: 'https://cronoscan.com/tx/',            logo: 'https://assets.coingecko.com/coins/images/7310/small/cro_token_logo.png',                                                                        color: '#002D74' },
+];
+
+async function fetchEvmChainHistory(
+    chain: typeof ALCHEMY_CHAINS[0],
+    userAddress: string
+): Promise<any[]> {
     try {
-        const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY || 'demo'
-        const ALCHEMY_URL = `https://bnb-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}`
-        const USDT_CONTRACT = '0x55d398326f99059fF775485246999027B3197955'
+        const body = (id: number, direction: 'to' | 'from') => JSON.stringify({
+            jsonrpc: '2.0', id,
+            method: 'alchemy_getAssetTransfers',
+            params: [{
+                fromBlock: '0x0',
+                toBlock: 'latest',
+                [direction === 'to' ? 'toAddress' : 'fromAddress']: userAddress,
+                category: ['external', 'internal', 'erc20', 'erc721', 'erc1155', 'specialnft'],
+                maxCount: '0x14',
+                order: 'desc',
+                withMetadata: true,
+            }]
+        });
 
-        console.log('📡 Fetching transaction history from Alchemy API for:', userAddress)
+        const [inRes, outRes] = await Promise.all([
+            fetch(chain.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(1, 'to') }),
+            fetch(chain.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body(2, 'from') }),
+        ]);
 
-        // Fetch incoming and outgoing transfers in parallel
-        const [incomingResponse, outgoingResponse] = await Promise.all([
-            // Incoming transfers (to this address)
-            fetch(ALCHEMY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 1,
-                    method: 'alchemy_getAssetTransfers',
-                    params: [{
-                        fromBlock: '0x0',
-                        toBlock: 'latest',
-                        toAddress: userAddress,
-                        contractAddresses: [USDT_CONTRACT],
-                        category: ['erc20'],
-                        maxCount: '0x32', // 50 in hex
-                        order: 'desc', // Most recent first
-                        withMetadata: true // Include timestamps
-                    }]
-                })
-            }),
-            // Outgoing transfers (from this address)
-            fetch(ALCHEMY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: 2,
-                    method: 'alchemy_getAssetTransfers',
-                    params: [{
-                        fromBlock: '0x0',
-                        toBlock: 'latest',
-                        fromAddress: userAddress,
-                        contractAddresses: [USDT_CONTRACT],
-                        category: ['erc20'],
-                        maxCount: '0x32', // 50 in hex
-                        order: 'desc', // Most recent first
-                        withMetadata: true // Include timestamps
-                    }]
-                })
-            })
-        ])
+        const inData = await inRes.json();
+        const outData = await outRes.json();
 
-        const incomingData = await incomingResponse.json()
-        const outgoingData = await outgoingResponse.json()
-
-        if (incomingData.error) {
-            console.error('Alchemy API error (incoming):', incomingData.error)
-            throw new Error(incomingData.error.message || 'Failed to fetch incoming transfers')
-        }
-
-        if (outgoingData.error) {
-            console.error('Alchemy API error (outgoing):', outgoingData.error)
-            throw new Error(outgoingData.error.message || 'Failed to fetch outgoing transfers')
-        }
-
-        const incomingTransfers = incomingData.result?.transfers || []
-        const outgoingTransfers = outgoingData.result?.transfers || []
-
-        console.log('✅ Alchemy API response:', {
-            incoming: incomingTransfers.length,
-            outgoing: outgoingTransfers.length,
-            total: incomingTransfers.length + outgoingTransfers.length
-        })
-
-        // Tag transfers with their type BEFORE combining
-        const taggedIncoming = incomingTransfers.map((t: any) => ({ ...t, transferType: 'Deposit' }))
-        const taggedOutgoing = outgoingTransfers.map((t: any) => ({ ...t, transferType: 'Withdraw' }))
-
-        // Combine and sort by block number (most recent first)
-        const allTransfers = [...taggedIncoming, ...taggedOutgoing]
-            .sort((a, b) => {
-                const blockA = parseInt(a.blockNum, 16)
-                const blockB = parseInt(b.blockNum, 16)
-                return blockB - blockA
-            })
-            .slice(0, 50)
-
-        // Format transactions for display
-        const transactions = allTransfers.map((transfer: any) => {
-            const date = transfer.metadata?.blockTimestamp
-                ? new Date(transfer.metadata.blockTimestamp).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    hour12: true
-                }).replace(',', ', ')
-                : 'Recent'
-
+        const format = (t: any, type: 'Deposit' | 'Withdraw') => {
+            const ts = t.metadata?.blockTimestamp ? new Date(t.metadata.blockTimestamp).getTime() : 0;
             return {
-                type: transfer.transferType, // Use the pre-tagged type
-                amount: `${transfer.value || '0'} USDT`,
-                date: date,
-                hash: transfer.hash,
-                blockNumber: transfer.blockNum
-            }
-        })
+                type,
+                amount: t.value != null ? `${parseFloat(t.value).toFixed(4)} ${t.asset || ''}`.trim() : '—',
+                date: ts
+                    ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).replace(',', ', ')
+                    : 'Recent',
+                hash: t.hash,
+                timestamp: ts,
+                chainId: chain.id,
+                chainName: chain.name,
+                chainLogo: chain.logo,
+                chainColor: chain.color,
+                explorerUrl: `${chain.explorer}${t.hash}`,
+            };
+        };
 
-        console.log('💾 Formatted', transactions.length, 'transactions:', {
-            deposits: transactions.filter(t => t.type === 'Deposit').length,
-            withdraws: transactions.filter(t => t.type === 'Withdraw').length
-        })
-        return transactions
-
-    } catch (error) {
-        console.error('Failed to fetch transaction history from Alchemy:', error)
-        throw error
+        return [
+            ...(inData.result?.transfers || []).map((t: any) => format(t, 'Deposit')),
+            ...(outData.result?.transfers || []).map((t: any) => format(t, 'Withdraw')),
+        ];
+    } catch {
+        return [];
     }
+}
+
+async function fetchSolanaHistory(solanaAddress: string): Promise<any[]> {
+    try {
+        const sigRes = await fetch('https://api.mainnet-beta.solana.com', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0', id: 1,
+                method: 'getSignaturesForAddress',
+                params: [solanaAddress, { limit: 20 }],
+            }),
+        });
+        const sigData = await sigRes.json();
+        const sigs: any[] = sigData.result || [];
+
+        return sigs.map((s: any) => {
+            const ts = s.blockTime ? s.blockTime * 1000 : 0;
+            return {
+                type: 'Transaction',
+                amount: '—',
+                date: ts
+                    ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }).replace(',', ', ')
+                    : 'Recent',
+                hash: s.signature,
+                timestamp: ts,
+                chainId: 101,
+                chainName: 'Solana',
+                chainLogo: 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+                chainColor: '#9945FF',
+                explorerUrl: `https://solscan.io/tx/${s.signature}`,
+            };
+        });
+    } catch {
+        return [];
+    }
+}
+
+export async function fetchTransactionHistoryAlchemy(
+    userAddress: string,
+    solanaAddress?: string | null
+): Promise<any[]> {
+    const evmResults = await Promise.allSettled(
+        ALCHEMY_CHAINS.map(chain => fetchEvmChainHistory(chain, userAddress))
+    );
+
+    const solanaResults = solanaAddress
+        ? await fetchSolanaHistory(solanaAddress)
+        : [];
+
+    const all = [
+        ...evmResults.flatMap(r => r.status === 'fulfilled' ? r.value : []),
+        ...solanaResults,
+    ]
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 50);
+
+    return all;
 }

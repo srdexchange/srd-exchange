@@ -153,13 +153,12 @@ export async function POST(request: NextRequest) {
 
 function determineUserRole(walletAddress: string): 'USER' | 'ADMIN' {
   const adminWallets = [
-    '0x68921410bd83A958e45Cf18e83fAecfDFcB80C3a',
+    '0x16071780eAAa5E5Ac7A31ca2485026Eb24071662',
   ]
 
   console.log(`Checking if ${walletAddress} is in admin wallets:`, adminWallets)
 
   const isAdmin = adminWallets.includes(walletAddress) || adminWallets.map(addr => addr.toLowerCase()).includes(walletAddress.toLowerCase())
   console.log(`Result: ${isAdmin ? 'ADMIN' : 'USER'}`)
-
   return isAdmin ? 'ADMIN' : 'USER'
 }

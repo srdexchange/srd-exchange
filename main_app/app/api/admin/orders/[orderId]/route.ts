@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { OrderStatus } from '@prisma/client'
+import { verifyAdminAccess } from '@/lib/admin-middleware'
 
 // PATCH - Update order (admin only)
 export async function PATCH(
@@ -8,27 +9,8 @@ export async function PATCH(
     { params }: { params: Promise<{ orderId: string }> }
 ) {
     try {
-        // Get admin wallet address from header
-        const adminWalletAddress = request.headers.get('x-wallet-address')
-
-        if (!adminWalletAddress) {
-            return NextResponse.json(
-                { success: false, error: 'Admin authentication required' },
-                { status: 401 }
-            )
-        }
-
-        // Verify admin status
-        const adminUser = await prisma.user.findUnique({
-            where: { walletAddress: adminWalletAddress.toLowerCase() }
-        })
-
-        if (!adminUser || adminUser.role !== 'ADMIN') {
-            return NextResponse.json(
-                { success: false, error: 'Admin privileges required' },
-                { status: 403 }
-            )
-        }
+        const authResult = await verifyAdminAccess(request)
+        if (authResult instanceof NextResponse) return authResult
 
         // Await params in Next.js 15
         const { orderId } = await params

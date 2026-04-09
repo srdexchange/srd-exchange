@@ -2,50 +2,43 @@
 
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-    X,
-    CircleUser,
     ArrowDownLeft,
     ArrowUpRight,
     Flame,
     ExternalLink,
-    ChevronRight,
-    ShoppingCart,
     ArrowLeft,
     Copy,
     CheckCircle2,
     Info,
-    Wallet,
     ChevronDown,
-    LogOut
+    LogOut,
+    RefreshCw,
+    FileClock,
 } from 'lucide-react'
 import { FC, useState, useEffect } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import Image from 'next/image'
-import { usePublicClient, useSmartAccount, useDisconnect, useWallets } from '@particle-network/connectkit'
-import { formatUnits, Address, parseAbiItem, parseUnits, erc20Abi } from 'viem'
+import { useSmartAccount, useDisconnect, useSwitchChain } from '@particle-network/connectkit'
+import { particleAuth } from '@particle-network/auth-core'
+import { parseUnits, erc20Abi } from 'viem'
 import { ethers } from 'ethers'
 import { useRouter } from 'next/navigation'
-import { retryWithRPCFailover } from '@/lib/rpcManager'
+import { useChainAssets } from '@/hooks/useChainAssets'
+import { CHAIN_CONFIGS, formatBalance, formatUsd, type TokenAsset } from '@/lib/ankrApi'
 
-const CONTRACTS = {
-    USDT: {
-        [56]: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`,
-    },
-}
 
 interface RightSidebarProps {
     isOpen: boolean
     onClose: () => void
-    address: string | undefined
     smartWalletAddress?: string | null
+    solanaAddress?: string | null
     userBalances: {
         usdt: string
         inr: string
     } | null
 }
 
-const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWalletAddress, userBalances }) => {
-    const [activeTab, setActiveTab] = useState<'All' | 'Deposit' | 'Withdraw'>('Deposit')
+const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, smartWalletAddress, solanaAddress }) => {
     const [currentView, setCurrentView] = useState<'Main' | 'Send' | 'Receive'>('Main')
     const [copyStatus, setCopyStatus] = useState(false)
     const [sendAmount, setSendAmount] = useState('')
@@ -54,20 +47,45 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     const [txHash, setTxHash] = useState<string | null>(null)
     const [sendError, setSendError] = useState<string | null>(null)
 
-    // CRITICAL: ONLY use smart wallet address - NO fallback to EOA
-    // If smartWalletAddress is null, we wait for it to be computed
-    const displayAddress = smartWalletAddress
-    const isSmartWalletDeployed = !!smartWalletAddress
-
     const [sellRate, setSellRate] = useState<number>(0)
     const [historyData, setHistoryData] = useState<any[]>([])
     const [isHistoryLoading, setIsHistoryLoading] = useState(false)
     const [showDisconnect, setShowDisconnect] = useState(false)
-    const publicClient = usePublicClient()
+    const [selectedChainId, setSelectedChainId] = useState(56)
+    const [isSwitchingChain, setIsSwitchingChain] = useState(false)
+    const [showChainDropdown, setShowChainDropdown] = useState(false)
+    const [showHistory, setShowHistory] = useState(false)
+    const [historyChainFilter, setHistoryChainFilter] = useState<number | 'all'>('all')
+    // Receive/Send mode toggles
+    const [receiveMode, setReceiveMode] = useState<'EVM' | 'SOL'>('EVM')
+    const [sendMode, setSendMode] = useState<'EVM' | 'SOL'>('EVM')
+const [selectedAsset, setSelectedAsset] = useState<TokenAsset | null>(null)
+    const [showAssetDropdown, setShowAssetDropdown] = useState(false)
+    const [selectedSolanaAsset, setSelectedSolanaAsset] = useState<TokenAsset | null>(null)
+    const [showSolanaAssetDropdown, setShowSolanaAssetDropdown] = useState(false)
+    const [showHistoryChainDropdown, setShowHistoryChainDropdown] = useState(false)
+    const [historyTypeFilter, setHistoryTypeFilter] = useState<'All' | 'Deposit' | 'Withdraw'>('All')
+
+    // Show Solana address when Solana chain is selected, EVM smart wallet otherwise
+    const displayAddress = selectedChainId === 101 ? solanaAddress : smartWalletAddress
+    const isSmartWalletDeployed = !!smartWalletAddress
     const smartAccount = useSmartAccount()
     const { disconnect } = useDisconnect()
-    const [primaryWallet] = useWallets()
+    const { switchChainAsync } = useSwitchChain()
     const router = useRouter()
+
+    const selectedChain = CHAIN_CONFIGS.find(c => c.id === selectedChainId) ?? CHAIN_CONFIGS[1]
+    const { assets, totalUsd, isLoading: assetsLoading, refetch: refetchAssets } = useChainAssets(
+        selectedChainId === 101 ? null : smartWalletAddress,
+        selectedChainId,
+        solanaAddress
+    )
+    // Always fetch Solana assets for the SOL send dropdown
+    const { assets: solanaAssets, isLoading: solanaAssetsLoading } = useChainAssets(
+        null,
+        101,
+        solanaAddress
+    )
 
     const handleLogout = async () => {
         try {
@@ -93,115 +111,117 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
         }
     }
 
-    const sendGaslessUSDT = async (
-        recipientAddress: string,
-        usdtAmount: string,
-        usdtDecimals: number
+    const sendGaslessToken = async (
+        asset: TokenAsset,
+        amount: string,
+        recipient: string,
     ): Promise<string> => {
         if (!smartAccount) throw new Error('Smart account not initialized');
+        if (!ethers.isAddress(recipient)) throw new Error('Invalid recipient address');
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) throw new Error('Enter a valid amount');
 
-        try {
-            console.log(`🚀 Sending ${usdtAmount} USDT to ${recipientAddress} (gasless)`);
+        let tx: { to: string; value: string; data: string };
 
-            // Validate recipient address
-            if (!ethers.isAddress(recipientAddress)) {
-                throw new Error('Invalid recipient address format');
-            }
-
-            // Validate amount
-            const amount = parseFloat(usdtAmount);
-            if (isNaN(amount) || amount <= 0) {
-                throw new Error('Please enter a valid USDT amount');
-            }
-
-            // Create contract interface for USDT transfer
+        if (asset.isNative) {
+            const valueHex = '0x' + parseUnits(amount, asset.decimals).toString(16);
+            tx = { to: recipient, value: valueHex, data: '0x' };
+        } else {
             const iface = new ethers.Interface(erc20Abi as any);
-            const parsedAmount = parseUnits(usdtAmount, usdtDecimals);
-
-            // Encode transfer function
-            const data = iface.encodeFunctionData('transfer', [
-                recipientAddress,
-                parsedAmount
-            ]);
-
-            // Prepare transaction
-            const tx = {
-                to: CONTRACTS.USDT[56],
-                value: '0x0',
-                data: data,
-            };
-
-            console.log('📋 Getting gasless fee quotes...');
-
-            // Get fee quotes with timeout
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Fee quote timeout. Please try again.')), 30000)
-            );
-
-            const feeQuotesResult = await Promise.race([
-                smartAccount.getFeeQuotes(tx),
-                timeoutPromise
-            ]) as any;
-
-            if (!feeQuotesResult) {
-                throw new Error('Failed to get fee quotes');
-            }
-
-            const gaslessQuote = feeQuotesResult.verifyingPaymasterGasless;
-
-            if (!gaslessQuote) {
-                throw new Error('Gasless transactions not available right now. Please try again later.');
-            }
-
-            console.log('✅ Sending gasless user operation...');
-
-            // Send user operation
-            const hash = await smartAccount.sendUserOperation({
-                userOp: gaslessQuote.userOp,
-                userOpHash: gaslessQuote.userOpHash,
-            });
-
-            console.log('✅ Transaction hash:', hash);
-            return hash;
-
-        } catch (error: any) {
-            console.error('❌ Gasless USDT transfer error:', error);
-
-            let userMessage = 'Transaction failed: ';
-
-            if (error.message.includes('insufficient')) {
-                userMessage += 'Insufficient USDT balance in your smart wallet.';
-            } else if (error.message.includes('timeout')) {
-                userMessage += 'Request timed out. Please check your connection and try again.';
-            } else if (error.message.includes('rejected')) {
-                userMessage += 'Transaction was rejected or canceled.';
-            } else if (error.message.includes('gasless')) {
-                userMessage += 'Gasless transactions are temporarily unavailable.';
-            } else {
-                userMessage += error.message || 'Unknown error occurred.';
-            }
-
-            throw new Error(userMessage);
+            const data = iface.encodeFunctionData('transfer', [recipient, parseUnits(amount, asset.decimals)]);
+            tx = { to: asset.contractAddress, value: '0x0', data };
         }
+
+        console.log(`🚀 Sending ${amount} ${asset.symbol} to ${recipient} (gasless)`);
+
+        const feeQuotesResult = await Promise.race([
+            smartAccount.getFeeQuotes(tx),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Fee quote timeout. Please try again.')), 30000)),
+        ]) as any;
+
+        const gaslessQuote = feeQuotesResult?.verifyingPaymasterGasless;
+        if (!gaslessQuote) throw new Error('Gasless transactions not available for this token/chain. Please try again.');
+
+        const hash = await smartAccount.sendUserOperation({
+            userOp: gaslessQuote.userOp,
+            userOpHash: gaslessQuote.userOpHash,
+        });
+
+        console.log('✅ Transaction hash:', hash);
+        return hash;
+    };
+
+    const sendSolanaAsset = async (asset: TokenAsset, recipient: string, amount: string): Promise<string> => {
+        if (!solanaAddress) throw new Error('Solana wallet not connected');
+        const amountNum = parseFloat(amount);
+        if (isNaN(amountNum) || amountNum <= 0) throw new Error('Enter a valid amount');
+
+        const { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } =
+            await import('@solana/web3.js');
+
+        let toPubkey: InstanceType<typeof PublicKey>;
+        try { toPubkey = new PublicKey(recipient); } catch { throw new Error('Invalid Solana address'); }
+
+        const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+        const connection = new Connection(
+            `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`,
+            'confirmed'
+        );
+        const fromPubkey = new PublicKey(solanaAddress);
+        const { blockhash } = await connection.getLatestBlockhash();
+        const transaction = new Transaction();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = fromPubkey;
+
+        if (asset.isNative) {
+            // Native SOL transfer
+            const lamports = Math.round(amountNum * LAMPORTS_PER_SOL);
+            transaction.add(SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
+        } else {
+            // SPL token transfer
+            // @ts-ignore — spl-token ESM exports mismatch (types exist but not resolvable via package.json exports)
+            const splToken = await import('@solana/spl-token' as any);
+            const { getAssociatedTokenAddress, createTransferInstruction } = splToken;
+            const mintPubkey = new PublicKey(asset.contractAddress);
+            const rawAmount = BigInt(Math.round(amountNum * 10 ** asset.decimals));
+            const fromAta = await getAssociatedTokenAddress(mintPubkey, fromPubkey);
+            const toAta = await getAssociatedTokenAddress(mintPubkey, toPubkey);
+            transaction.add(createTransferInstruction(fromAta, toAta, fromPubkey, rawAmount));
+        }
+
+        const hash = await particleAuth.solana.signAndSendTransaction(transaction as any);
+        console.log('✅ Solana tx:', hash);
+        return hash as string;
     };
 
     const handleSend = async () => {
         if (!recipientAddress || !sendAmount) return
+        if (sendMode === 'EVM' && !selectedAsset) return
         setSendError(null)
         setTxHash(null)
         setIsSending(true)
 
         try {
-            const hash = await sendGaslessUSDT(recipientAddress, sendAmount, 18)
-            setTxHash(hash)
-            setSendAmount('')
-            setRecipientAddress('')
-            // Refetch after a short delay
-            setTimeout(() => {
-                if (displayAddress) fetchOnChainHistory(displayAddress)
-            }, 5000)
+            if (sendMode === 'EVM') {
+                const hash = await sendGaslessToken(selectedAsset!, sendAmount, recipientAddress)
+                setTxHash(hash)
+                setSendAmount('')
+                setRecipientAddress('')
+                setTimeout(() => { if (smartWalletAddress) fetchOnChainHistory(smartWalletAddress) }, 5000)
+            } else {
+                // Solana
+                if (!selectedSolanaAsset) throw new Error('Select an asset to send')
+                const hash = await sendSolanaAsset(selectedSolanaAsset, recipientAddress, sendAmount)
+                setTxHash(hash)
+                setSendAmount('')
+                setRecipientAddress('')
+            }
         } catch (err: any) {
-            setSendError(err.message)
+            console.error('[Send error]', err)
+            let msg = err.message || 'Unknown error'
+            if (msg.includes('timeout')) msg = 'Request timed out. Check your connection and try again.'
+            else if (msg.includes('rejected') || msg.includes('cancel')) msg = 'Transaction rejected or cancelled.'
+            setSendError(msg)
         } finally {
             setIsSending(false)
         }
@@ -214,10 +234,11 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
         setIsHistoryLoading(true)
 
         try {
-            // Use Alchemy's optimized getAssetTransfers API
-            const { fetchTransactionHistoryAlchemy } = await import('@/lib/alchemyApi')
-            const transactions = await fetchTransactionHistoryAlchemy(userAddress)
-            setHistoryData(transactions)
+            const params = new URLSearchParams({ address: userAddress })
+            if (solanaAddress) params.set('solanaAddress', solanaAddress)
+            const res = await fetch(`/api/wallet/history?${params}`)
+            const data = await res.json()
+            setHistoryData(data.transactions ?? [])
         } catch (err) {
             console.error('Failed to fetch transaction history:', err)
             setHistoryData([])
@@ -227,14 +248,12 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     }
 
     useEffect(() => {
-        // Only fetch history when we have a smart wallet address
-        if (isOpen && displayAddress) {
-            console.log('🔄 Sidebar opened, fetching history for smart wallet:', displayAddress)
-            fetchOnChainHistory(displayAddress)
-        } else if (isOpen && !displayAddress) {
-            console.log('⏳ Waiting for smart wallet address to be computed...')
+        // Always use smartWalletAddress for EVM history (same address on all chains)
+        if (isOpen && smartWalletAddress) {
+            console.log('🔄 Sidebar opened, fetching history for smart wallet:', smartWalletAddress)
+            fetchOnChainHistory(smartWalletAddress)
         }
-    }, [isOpen, displayAddress])
+    }, [isOpen, smartWalletAddress])
 
     useEffect(() => {
         const fetchRates = async () => {
@@ -256,15 +275,6 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
         }
     }, [isOpen])
 
-    const calculateInr = () => {
-        if (!userBalances?.usdt || !sellRate) return "0.00"
-        const usdt = parseFloat(userBalances.usdt)
-        return (usdt * sellRate).toLocaleString('en-IN', {
-            maximumFractionDigits: 2,
-            minimumFractionDigits: 2
-        })
-    }
-
     const formatAddress = (addr: string) => {
         if (!addr) return ''
         return `${addr.slice(0, 6)}...${addr.slice(-4)}`
@@ -280,238 +290,624 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
     const renderHeader = () => {
         if (currentView === 'Main') {
             return (
-                <div className="relative flex flex-col p-6 gap-2">
+                <div className="relative flex flex-col px-4 py-3 gap-2 shrink-0">
                     <div className="flex items-center justify-between gap-2">
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                        {/* Close */}
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors shrink-0">
                             <Image src="/side.svg" alt="Close" width={24} height={24} />
                         </button>
-                        <button
-                            onClick={() => setShowDisconnect(!showDisconnect)}
-                            className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
-                        >
-                            <Image src="/srd_gen.svg" alt="User" width={24} height={24} />
-                            <span className="text-white text-sm font-medium">{formatAddress(displayAddress || "0x0000...0000")}</span>
-                        </button>
-                    </div>
 
-                    <AnimatePresence>
-                        {showDisconnect && (
-                            <motion.button
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                onClick={handleLogout}
-                                className="absolute top-[75px] right-18 flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-xl transition-all shadow-xl z-50 font-bold"
-                            >
-                                <LogOut className="w-4 h-4" />
-                                Disconnect
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
+                        <div className="flex items-center gap-2 min-w-0">
+                            {/* Chain selector — left of address */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => { if (!isSwitchingChain) { setShowChainDropdown(p => !p); setShowDisconnect(false); } }}
+                                    className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-full hover:bg-white/10 transition-colors disabled:opacity-60"
+                                    disabled={isSwitchingChain}
+                                >
+                                    {isSwitchingChain ? (
+                                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />
+                                    ) : (
+                                        <img
+                                            src={selectedChain.logo}
+                                            alt={selectedChain.name}
+                                            className="w-4 h-4 rounded-full shrink-0 object-contain"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                        />
+                                    )}
+                                    <span className="text-white text-xs font-medium hidden sm:block">
+                                        {isSwitchingChain ? 'Switching...' : selectedChain.name}
+                                    </span>
+                                    {!isSwitchingChain && <ChevronDown className={`w-3 h-3 text-white/40 transition-transform shrink-0 ${showChainDropdown ? 'rotate-180' : ''}`} />}
+                                </button>
+
+                                <AnimatePresence>
+                                    {showChainDropdown && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -6 }}
+                                            className="absolute top-full mt-1 left-0 w-48 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl"
+                                        >
+                                            {CHAIN_CONFIGS.map(chain => (
+                                                <button
+                                                    key={chain.id}
+                                                    onClick={async () => {
+    setShowChainDropdown(false);
+    setSelectedAsset(null);
+    setSelectedSolanaAsset(null);
+    setSendAmount('');
+    setRecipientAddress('');
+    if (chain.id === 101) {
+        // Solana — no EVM chain switch needed
+        setSendMode('SOL');
+        setReceiveMode('SOL');
+        setSelectedChainId(101);
+    } else {
+        setSendMode('EVM');
+        setReceiveMode('EVM');
+        setSelectedChainId(chain.id);
+        // Actually switch Particle's active chain so smartAccount uses the right bundler
+        try {
+            setIsSwitchingChain(true);
+            await switchChainAsync({ chainId: chain.id });
+        } catch (e) {
+            console.warn('Chain switch failed:', e);
+        } finally {
+            setIsSwitchingChain(false);
+        }
+    }
+}}
+                                                    disabled={chain.id === 101 && !solanaAddress}
+                                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left
+                                                        ${selectedChainId === chain.id ? 'bg-white/10' : ''}
+                                                        ${chain.id === 101 && !solanaAddress ? 'opacity-40 cursor-not-allowed' : ''}
+                                                    `}
+                                                >
+                                                    <img
+                                                        src={chain.logo}
+                                                        alt={chain.name}
+                                                        className="w-5 h-5 rounded-full shrink-0 object-contain"
+                                                        onError={(e) => {
+                                                            const el = e.target as HTMLImageElement;
+                                                            el.style.display = 'none';
+                                                            el.nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                    <div className="hidden w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold text-white" style={{ backgroundColor: chain.color }}>
+                                                        {chain.abbr}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="text-white text-sm truncate">{chain.name}</div>
+                                                        {chain.id === 101 && !solanaAddress && (
+                                                            <div className="text-white/30 text-xs">Auth login only</div>
+                                                        )}
+                                                    </div>
+                                                    {selectedChainId === chain.id && (
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-[#622DBF] ml-auto shrink-0" />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Address + disconnect dropdown */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => { setShowDisconnect(p => !p); setShowChainDropdown(false); }}
+                                    className={`flex items-center gap-1.5 bg-white/5 border px-2.5 py-1.5 rounded-full hover:bg-white/10 transition-colors min-w-0 ${showDisconnect ? 'border-white/20 bg-white/10' : 'border-white/10'}`}
+                                >
+                                    <Image src="/srd_gen.svg" alt="User" width={18} height={18} className="shrink-0" />
+                                    <span className="text-white text-xs font-medium truncate">{formatAddress(displayAddress || "0x0000...0000")}</span>
+                                    <ChevronDown className={`w-3 h-3 text-white/40 transition-transform shrink-0 ${showDisconnect ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                <AnimatePresence>
+                                    {showDisconnect && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                                            className="absolute top-full mt-1 right-0 w-44 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl"
+                                        >
+                                            <button
+                                                onClick={handleLogout}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium"
+                                            >
+                                                <LogOut className="w-4 h-4 shrink-0" />
+                                                Disconnect
+                                            </button>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )
         }
 
         return (
-            <div className="flex items-center bg-white/5 justify-between p-4">
+            <div className="relative flex items-center bg-white/5 px-4 py-4 shrink-0">
                 <button
                     onClick={() => setCurrentView('Main')}
-                    className="rounded-full transition-colors"
+                    className="absolute left-4 rounded-full transition-colors hover:bg-white/10 p-1"
                 >
                     <ArrowLeft className="w-6 h-6 text-white" />
                 </button>
-                <h2 className="text-white text-xl font-bold">{currentView}</h2>
-                <div className="w-10" /> {/* Spacer for centering */}
+                <h2 className="text-white text-xl font-bold mx-auto">{currentView}</h2>
             </div>
         )
     }
 
-    const renderReceiveView = () => (
-        <div className="flex-1 px-6 pb-20 flex flex-col items-center space-y-8 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
-            {/* Warning Box */}
-            <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
-                <div className="mt-1">
-                    <div className="w-5 h-5 rounded-full bg-[#EAB308] flex items-center justify-center">
-                        <span className="text-black text-xs font-bold font-serif">!</span>
+    const renderReceiveView = () => {
+        const receiveAddr = receiveMode === 'SOL' ? solanaAddress : smartWalletAddress
+        return (
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="min-h-full flex flex-col items-center justify-center gap-6 px-6 pt-10 pb-28">
+
+                {/* EVM / Solana toggle */}
+                <div className="w-full flex items-center justify-between">
+                    <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                        {(['EVM', 'SOL'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => {
+                                    setReceiveMode(mode);
+                                    if (mode === 'EVM' && selectedChainId === 101) setSelectedChainId(56);
+                                    if (mode === 'SOL') setSelectedChainId(101);
+                                }}
+                                disabled={mode === 'SOL' && !solanaAddress}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${receiveMode === mode ? 'bg-[#6320EE] text-white' : 'text-white/40 hover:text-white/70'} disabled:opacity-30 disabled:cursor-not-allowed`}
+                            >
+                                {mode === 'SOL' ? 'Solana' : 'EVM'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Stacked chain logos */}
+                    <div className="flex items-center">
+                        {CHAIN_CONFIGS.filter(c => receiveMode === 'SOL' ? c.id === 101 : c.id !== 101).map((chain, i, arr) => (
+                            <div
+                                key={chain.id}
+                                className="w-6 h-6 rounded-full border-2 border-black overflow-hidden bg-black shrink-0"
+                                style={{ marginLeft: i === 0 ? 0 : '-8px', zIndex: arr.length - i }}
+                                title={chain.name}
+                            >
+                                <img
+                                    src={chain.logo}
+                                    alt={chain.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        const el = e.target as HTMLImageElement
+                                        el.style.display = 'none'
+                                        el.parentElement!.style.background = chain.color
+                                    }}
+                                />
+                            </div>
+                        ))}
                     </div>
                 </div>
-                <p className="text-white text-sm font-medium pt-2 leading-tight">
-                    Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
-                </p>
-            </div>
 
-            {/* USDT Banner */}
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 relative">
-                    <Image src="https://cryptologos.cc/logos/tether-usdt-logo.png" alt="USDT" fill className="object-contain" />
-                </div>
-                <div className="flex flex-col">
-                    <span className="text-white font-bold text-xl">USDT <span className="text-gray-500 font-medium">BEP20</span></span>
-                </div>
-            </div>
-
-            {/* QR Code */}
-            <div className="p-6 bg-white rounded-3xl shadow-2xl">
-                <QRCodeSVG value={displayAddress || ''} size={200} level="H" />
-            </div>
-
-            {/* Address Box */}
-            <div className="w-full space-y-2">
-                <p className="text-gray-500 text-sm font-medium text-center">
-                    Your {isSmartWalletDeployed ? 'Smart Wallet' : 'Wallet'} Address
-                </p>
-                <div
-                    onClick={() => copyToClipboard(displayAddress || '')}
-                    className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/10 transition-colors group"
-                >
-                    <span className="text-white font-mono text-sm break-all flex-1 mr-4">
-                        {displayAddress}
-                    </span>
-                    <div className="shrink-0">
-                        {copyStatus ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-500" />
-                        ) : (
-                            <Copy className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
-                        )}
-                    </div>
-                </div>
-                {!isSmartWalletDeployed && displayAddress && (
-                    <div className="w-full p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-2">
-                        <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                        <p className="text-blue-400 text-xs leading-tight">
-                            This is your smart wallet address. It will be activated on your first transaction.
-                        </p>
-                    </div>
-                )}
-            </div>
-
-
-        </div>
-    )
-
-    const renderSendView = () => (
-        <div className="flex-1 px-6 pb-20 flex flex-col space-y-8 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
-            {/* Warning Box */}
-            <div className="w-full p-4 rounded-2xl bg-[#EAB308]/10 border border-[#EAB308]/20 flex gap-3">
-                <div className="mt-1 shrink-0">
-                    <div className="w-5 h-5 rounded-full bg-[#EAB308] flex items-center justify-center">
-                        <span className="text-black text-xs font-bold font-serif">!</span>
-                    </div>
-                </div>
-                <p className="text-[#EAB308] text-sm font-medium leading-tight">
-                    Only send Tether USD (BEP20) assets to this address. Other assets will be lost forever.
-                </p>
-            </div>
-
-            {txHash && (
-                <div className="w-full p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-green-500">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span className="font-bold">Transaction Sent!</span>
-                    </div>
-                    <a
-                        href={`https://bscscan.com/tx/${txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-green-500/80 hover:underline break-all"
-                    >
-                        View on BscScan: {txHash}
-                    </a>
-                </div>
-            )}
-
-            {
-                sendError && (
-                    <div className="w-full p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
-                        <div className="shrink-0 mt-0.5">
-                            <Info className="w-5 h-5 text-red-500" />
-                        </div>
-                        <p className="text-red-500 text-sm font-medium leading-tight">
-                            {sendError}
-                        </p>
-                    </div>
-                )
-            }
-
-            {/* Address Input */}
-            <div className="space-y-3">
-                <label className="text-white font-bold block">Address or Domain Name</label>
-                <div className="relative">
-                    <input
-                        type="text"
-                        placeholder="Search or Enter"
-                        value={recipientAddress}
-                        onChange={(e) => setRecipientAddress(e.target.value)}
-                        className="w-full bg-transparent border border-white/20 rounded-2xl py-4 px-5 pr-20 text-white focus:border-[#6320EE] focus:ring-1 focus:ring-[#6320EE] outline-none transition-all placeholder:text-gray-600"
-                    />
-                    <button
-                        onClick={async () => {
-                            const text = await navigator.clipboard.readText()
-                            setRecipientAddress(text)
-                        }}
-                        className="absolute right-5 top-1/2 -translate-y-1/2 text-[#00FF5E] font-bold text-sm hover:opacity-80"
-                    >
-                        Paste
-                    </button>
-                </div>
-            </div>
-
-            {/* Network Selector (Hardcoded for now as per image) */}
-            <div className="space-y-3">
-                <label className="text-white font-bold block">Destination network</label>
-                <button className="flex items-center gap-3 bg-white/5 border border-white/20 rounded-2xl py-2 px-2 hover:bg-white/15 transition-colors">
-                    <div className="w-5 h-5  rounded-full flex items-center justify-center overflow-hidden">
-                        <Image src="/bsc.svg" alt="BNB" width={18} height={18} />
-                    </div>
-                    <span className="text-white font-medium">BNB Smart chain</span>
-                    <ChevronDown className="w-4 h-4 text-gray-500 ml-auto" />
-                </button>
-            </div>
-
-            {/* Amount Input */}
-            <div className="space-y-3">
-                <label className="text-white font-bold block">Amount</label>
-                <div className="relative">
-                    <input
-                        type="number"
-                        placeholder="USDT Amount"
-                        value={sendAmount}
-                        onChange={(e) => setSendAmount(e.target.value)}
-                        className="w-full bg-transparent border border-white/20 rounded-2xl py-4 px-5 pr-24 text-white focus:border-[#6320EE] focus:ring-1 focus:ring-[#6320EE] outline-none transition-all placeholder:text-gray-600 font-medium"
-                    />
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                        <span className="text-gray-500 font-bold text-sm">USDT</span>
-                        <button
-                            onClick={() => setSendAmount(userBalances?.usdt || '0')}
-                            className="text-[#00FF5E] font-bold text-sm hover:opacity-80"
-                        >
-                            Max
-                        </button>
-                    </div>
-                </div>
-                <div className="flex justify-between items-center px-1">
-                    <span className="text-gray-500 text-xs">Available: {userBalances?.usdt || '0'} USDT</span>
-                </div>
-            </div>
-
-            {/* Send Button */}
-            <div className="pt-4  mb-6 mt-auto">
-                <button
-                    onClick={handleSend}
-                    disabled={!sendAmount || !recipientAddress || isSending}
-                    className="w-full bg-[#6320EE] hover:bg-[#5219d1] disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-[0_8px_30px_rgb(99,32,238,0.3)]"
-                >
-                    {isSending ? (
-                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <p className="text-white/30 text-xs text-center -mt-2">
+                    {receiveMode === 'EVM' ? (
+                        <>All EVM-compatible <span className="text-yellow-400 font-medium">tokens</span> can be securely deposited into a smart wallet address</>
                     ) : (
-                        <div className="w-4 h-4 border-2 border-white rounded-full flex items-center justify-center">
-                            <Image src="/send.svg" alt="Send" width={24} height={24} />
+                        <>All Solana-compatible <span className="text-yellow-400 font-medium">tokens</span> can be securely deposited into this address</>
+                    )}
+                </p>
+
+                {/* QR Code */}
+                <div className="p-5 bg-white rounded-3xl shadow-2xl">
+                    <QRCodeSVG value={receiveAddr || ''} size={190} level="H" />
+                </div>
+
+                {/* Address Box */}
+                <div className="w-full space-y-2">
+                    <p className="text-gray-500 text-sm font-medium text-center">
+                        Your {receiveMode === 'SOL' ? 'Solana' : 'Smart Wallet'} Address
+                    </p>
+                    <div
+                        onClick={() => copyToClipboard(receiveAddr || '')}
+                        className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/10 transition-colors group"
+                    >
+                        <span className="text-white font-mono text-sm break-all flex-1 mr-4">
+                            {receiveAddr || (receiveMode === 'SOL' ? 'Solana address not available' : 'Wallet not connected')}
+                        </span>
+                        <div className="shrink-0">
+                            {copyStatus ? (
+                                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                            ) : (
+                                <Copy className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+                            )}
+                        </div>
+                    </div>
+                    {receiveMode === 'EVM' && !isSmartWalletDeployed && smartWalletAddress && (
+                        <div className="w-full p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex gap-2">
+                            <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                            <p className="text-blue-400 text-xs leading-tight">
+                                Smart wallet activates on your first transaction.
+                            </p>
                         </div>
                     )}
-                    {isSending ? 'Sending...' : 'Send'}
-                </button>
+                </div>
+
             </div>
-        </div >
+
+        </div>
+        )
+    }
+
+    const renderSendView = () => (
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="min-h-full flex flex-col gap-5 px-6 pt-8 pb-28">
+
+                {/* EVM / Solana toggle */}
+                <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1 w-fit">
+                    {(['EVM', 'SOL'] as const).map(mode => (
+                        <button
+                            key={mode}
+                            onClick={() => {
+    setSendMode(mode);
+    setSendError(null);
+    setTxHash(null);
+    setSendAmount('');
+    setRecipientAddress('');
+    setSelectedAsset(null);
+    setSelectedSolanaAsset(null);
+    // Sync header chain: if switching to EVM while Solana is selected, reset to BNB
+    if (mode === 'EVM' && selectedChainId === 101) setSelectedChainId(56);
+    // If switching to SOL while an EVM chain is selected, set to Solana
+    if (mode === 'SOL') setSelectedChainId(101);
+}}
+                            disabled={mode === 'SOL' && !solanaAddress}
+                            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${sendMode === mode ? 'bg-[#6320EE] text-white' : 'text-white/40 hover:text-white/70'} disabled:opacity-30 disabled:cursor-not-allowed`}
+                        >
+                            {mode === 'SOL' ? 'Solana' : 'EVM'}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Status messages */}
+                {txHash && (
+                    <div className="w-full p-4 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-green-500">
+                            <CheckCircle2 className="w-5 h-5" />
+                            <span className="font-bold">Transaction Sent!</span>
+                        </div>
+                        <a
+                            href={sendMode === 'SOL'
+                                ? `https://solscan.io/tx/${txHash}`
+                                : `${selectedChain.explorer}${txHash}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-green-500/80 hover:underline break-all"
+                        >
+                            View on explorer ↗
+                        </a>
+                    </div>
+                )}
+                {sendError && (
+                    <div className="w-full p-3 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3">
+                        <Info className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <p className="text-red-500 text-sm leading-tight">{sendError}</p>
+                    </div>
+                )}
+
+                {sendMode === 'EVM' ? (
+                    <>
+                        {/* Gasless badge */}
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-green-500/30 bg-green-500/10 text-[#00FF5E] text-xs font-bold w-fit">
+                            <Flame className="w-3.5 h-3.5 fill-current" />
+                            Gasless · All EVM Chains
+                        </div>
+
+                        {/* Asset selector */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Asset <span className="text-white/30 font-normal">({selectedChain.name})</span></label>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowAssetDropdown(p => !p)}
+                                    className="w-full flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl py-3 px-4 hover:bg-white/10 transition-colors"
+                                >
+                                    {selectedAsset ? (
+                                        <>
+                                            <div className="relative w-8 h-8 shrink-0">
+                                                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/60">
+                                                    {selectedAsset.symbol.slice(0, 3).toUpperCase()}
+                                                </div>
+                                                {(selectedAsset.thumbnail || (!selectedAsset.isNative && selectedAsset.contractAddress)) && (
+                                                    <img
+                                                        src={selectedAsset.thumbnail || `https://tokens.1inch.io/${selectedAsset.contractAddress.toLowerCase()}.png`}
+                                                        alt={selectedAsset.symbol}
+                                                        className="absolute inset-0 w-8 h-8 rounded-full object-cover"
+                                                        onError={(e) => {
+                                                            const el = e.target as HTMLImageElement;
+                                                            const f = `https://tokens.1inch.io/${selectedAsset.contractAddress.toLowerCase()}.png`;
+                                                            if (!selectedAsset.isNative && el.src !== f) { el.src = f; } else { el.style.display = 'none'; }
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <div className="text-white text-sm font-medium">{selectedAsset.symbol}</div>
+                                                <div className="text-white/30 text-xs">{formatBalance(selectedAsset.balance, selectedAsset.decimals)} available</div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <span className="text-white/40 text-sm flex-1 text-left">
+                                            {assetsLoading ? 'Loading assets...' : assets.length === 0 ? `No assets on ${selectedChain.name}` : 'Select asset to send'}
+                                        </span>
+                                    )}
+                                    <ChevronDown className={`w-4 h-4 text-white/40 transition-transform shrink-0 ${showAssetDropdown ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                <AnimatePresence>
+                                    {showAssetDropdown && assets.length > 0 && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                                            className="absolute top-full mt-1 left-0 right-0 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl max-h-52 overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                                        >
+                                            {assets.map((asset, i) => (
+                                                <button
+                                                    key={`${asset.contractAddress}-${i}`}
+                                                    onClick={() => { setSelectedAsset(asset); setSendAmount(''); setShowAssetDropdown(false) }}
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                                >
+                                                    <div className="relative w-7 h-7 shrink-0">
+                                                        <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/60">
+                                                            {asset.symbol.slice(0, 3).toUpperCase()}
+                                                        </div>
+                                                        {(asset.thumbnail || (!asset.isNative && asset.contractAddress)) && (
+                                                            <img
+                                                                src={asset.thumbnail || `https://tokens.1inch.io/${asset.contractAddress.toLowerCase()}.png`}
+                                                                alt={asset.symbol}
+                                                                className="absolute inset-0 w-7 h-7 rounded-full object-cover"
+                                                                onError={(e) => {
+                                                                    const el = e.target as HTMLImageElement;
+                                                                    const f = `https://tokens.1inch.io/${asset.contractAddress.toLowerCase()}.png`;
+                                                                    if (!asset.isNative && el.src !== f) { el.src = f; } else { el.style.display = 'none'; }
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-white text-sm font-medium">{asset.symbol}</div>
+                                                        <div className="text-white/30 text-xs truncate">{asset.name}</div>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <div className="text-white/60 text-xs">{formatBalance(asset.balance, asset.decimals)}</div>
+                                                        <div className="text-white/30 text-xs">{formatUsd(asset.balanceUsd)}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+
+                        {/* Recipient */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Recipient Address</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="0x..."
+                                    value={recipientAddress}
+                                    onChange={(e) => setRecipientAddress(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 pr-20 text-white focus:border-[#6320EE] outline-none transition-all placeholder:text-white/20 text-sm"
+                                />
+                                <button
+                                    onClick={async () => setRecipientAddress(await navigator.clipboard.readText())}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#00FF5E] font-bold text-sm hover:opacity-80"
+                                >Paste</button>
+                            </div>
+                        </div>
+
+                        {/* Amount */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Amount</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    placeholder="0.00"
+                                    value={sendAmount}
+                                    onChange={(e) => setSendAmount(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 pr-28 text-white focus:border-[#6320EE] outline-none transition-all placeholder:text-white/20 font-medium text-sm"
+                                />
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {selectedAsset && <span className="text-white/30 text-xs font-bold">{selectedAsset.symbol}</span>}
+                                    <button
+                                        onClick={() => selectedAsset && setSendAmount(formatBalance(selectedAsset.balance, selectedAsset.decimals))}
+                                        className="text-[#00FF5E] font-bold text-sm hover:opacity-80"
+                                    >Max</button>
+                                </div>
+                            </div>
+                            {selectedAsset && (
+                                <p className="text-white/30 text-xs px-1">
+                                    Balance: {formatBalance(selectedAsset.balance, selectedAsset.decimals)} {selectedAsset.symbol}
+                                    {selectedAsset.balanceUsd && parseFloat(selectedAsset.balanceUsd) > 0 && ` · ${formatUsd(selectedAsset.balanceUsd)}`}
+                                </p>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    /* ── Solana send ── */
+                    <>
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#9945FF]/30 bg-[#9945FF]/10 text-[#9945FF] text-xs font-bold w-fit">
+                            <Info className="w-3.5 h-3.5" />
+                            Network fees are paid in SOL by the user
+                        </div>
+
+                        {/* Solana Asset selector */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Asset <span className="text-white/30 font-normal">(Solana)</span></label>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowSolanaAssetDropdown(p => !p)}
+                                    className="w-full flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl py-3 px-4 hover:bg-white/10 transition-colors"
+                                >
+                                    {selectedSolanaAsset ? (
+                                        <>
+                                            <div className="relative w-8 h-8 shrink-0">
+                                                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/60">
+                                                    {selectedSolanaAsset.symbol.slice(0, 3).toUpperCase()}
+                                                </div>
+                                                {(selectedSolanaAsset.thumbnail || (!selectedSolanaAsset.isNative && selectedSolanaAsset.contractAddress)) && (
+                                                    <img
+                                                        src={selectedSolanaAsset.thumbnail || `https://tokens.1inch.io/${selectedSolanaAsset.contractAddress.toLowerCase()}.png`}
+                                                        alt={selectedSolanaAsset.symbol}
+                                                        className="absolute inset-0 w-8 h-8 rounded-full object-cover"
+                                                        onError={(e) => {
+                                                            const el = e.target as HTMLImageElement;
+                                                            const f = `https://tokens.1inch.io/${selectedSolanaAsset.contractAddress.toLowerCase()}.png`;
+                                                            if (!selectedSolanaAsset.isNative && el.src !== f) { el.src = f; } else { el.style.display = 'none'; }
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 text-left">
+                                                <div className="text-white text-sm font-medium">{selectedSolanaAsset.symbol}</div>
+                                                <div className="text-white/30 text-xs">{formatBalance(selectedSolanaAsset.balance, selectedSolanaAsset.decimals)} available</div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <span className="text-white/40 text-sm flex-1 text-left">
+                                            {solanaAssetsLoading ? 'Loading assets...' : solanaAssets.length === 0 ? 'No assets on Solana' : 'Select asset to send'}
+                                        </span>
+                                    )}
+                                    <ChevronDown className={`w-4 h-4 text-white/40 transition-transform shrink-0 ${showSolanaAssetDropdown ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                <AnimatePresence>
+                                    {showSolanaAssetDropdown && solanaAssets.length > 0 && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                                            className="absolute top-full mt-1 left-0 right-0 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl max-h-52 overflow-y-auto [&::-webkit-scrollbar]:hidden"
+                                        >
+                                            {solanaAssets.map((asset, i) => (
+                                                <button
+                                                    key={`${asset.contractAddress}-${i}`}
+                                                    onClick={() => { setSelectedSolanaAsset(asset); setSendAmount(''); setShowSolanaAssetDropdown(false) }}
+                                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                                >
+                                                    <div className="relative w-7 h-7 shrink-0">
+                                                        <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-bold text-white/60">
+                                                            {asset.symbol.slice(0, 3).toUpperCase()}
+                                                        </div>
+                                                        {(asset.thumbnail || (!asset.isNative && asset.contractAddress)) && (
+                                                            <img
+                                                                src={asset.thumbnail || `https://tokens.1inch.io/${asset.contractAddress.toLowerCase()}.png`}
+                                                                alt={asset.symbol}
+                                                                className="absolute inset-0 w-7 h-7 rounded-full object-cover"
+                                                                onError={(e) => {
+                                                                    const el = e.target as HTMLImageElement;
+                                                                    const f = `https://tokens.1inch.io/${asset.contractAddress.toLowerCase()}.png`;
+                                                                    if (!asset.isNative && el.src !== f) { el.src = f; } else { el.style.display = 'none'; }
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-white text-sm font-medium">{asset.symbol}</div>
+                                                        <div className="text-white/30 text-xs truncate">{asset.name}</div>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <div className="text-white/60 text-xs">{formatBalance(asset.balance, asset.decimals)}</div>
+                                                        <div className="text-white/30 text-xs">{formatUsd(asset.balanceUsd)}</div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+
+                        {/* Recipient */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Recipient Solana Address</label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Solana address..."
+                                    value={recipientAddress}
+                                    onChange={(e) => setRecipientAddress(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 pr-20 text-white focus:border-[#9945FF] outline-none transition-all placeholder:text-white/20 text-sm font-mono"
+                                />
+                                <button
+                                    onClick={async () => setRecipientAddress(await navigator.clipboard.readText())}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9945FF] font-bold text-sm hover:opacity-80"
+                                >Paste</button>
+                            </div>
+                        </div>
+
+                        {/* Amount */}
+                        <div className="space-y-2">
+                            <label className="text-white font-semibold block text-sm">Amount</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    placeholder="0.00"
+                                    value={sendAmount}
+                                    onChange={(e) => setSendAmount(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 px-4 pr-28 text-white focus:border-[#9945FF] outline-none transition-all placeholder:text-white/20 font-medium text-sm"
+                                />
+                                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                    {selectedSolanaAsset && <span className="text-white/30 text-xs font-bold">{selectedSolanaAsset.symbol}</span>}
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedSolanaAsset) return;
+                                            if (selectedSolanaAsset.isNative) {
+                                                // Reserve 2x estimated fee (~0.00001 SOL) as buffer
+                                                const max = Math.max(0, parseFloat(formatBalance(selectedSolanaAsset.balance, selectedSolanaAsset.decimals)) - 0.00001);
+                                                setSendAmount(max > 0 ? max.toString() : '0');
+                                            } else {
+                                                setSendAmount(formatBalance(selectedSolanaAsset.balance, selectedSolanaAsset.decimals));
+                                            }
+                                        }}
+                                        className="text-[#9945FF] font-bold text-sm hover:opacity-80"
+                                    >Max</button>
+                                </div>
+                            </div>
+                            {selectedSolanaAsset && (
+                                <p className="text-white/30 text-xs px-1">
+                                    Balance: {formatBalance(selectedSolanaAsset.balance, selectedSolanaAsset.decimals)} {selectedSolanaAsset.symbol}
+                                    {selectedSolanaAsset.balanceUsd && parseFloat(selectedSolanaAsset.balanceUsd) > 0 && ` · ${formatUsd(selectedSolanaAsset.balanceUsd)}`}
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )}
+
+                {/* Send Button — same for both modes */}
+                <div className="mt-auto pt-2">
+                    <button
+                        onClick={handleSend}
+                        disabled={
+                            !sendAmount || !recipientAddress || isSending ||
+                            (sendMode === 'EVM' && !selectedAsset) ||
+                            (sendMode === 'SOL' && !selectedSolanaAsset)
+                        }
+                        className={`w-full disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+                            sendMode === 'SOL'
+                                ? 'bg-[#9945FF] hover:bg-[#7c35cc] shadow-[0_8px_30px_rgba(153,69,255,0.3)]'
+                                : 'bg-[#6320EE] hover:bg-[#5219d1] shadow-[0_8px_30px_rgb(99,32,238,0.3)]'
+                        }`}
+                    >
+                        {isSending ? (
+                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <Image src="/send.svg" alt="Send" width={20} height={20} />
+                        )}
+                        {isSending ? 'Sending...' : sendMode === 'EVM' ? `Send${selectedAsset ? ` ${selectedAsset.symbol}` : ''}` : `Send${selectedSolanaAsset ? ` ${selectedSolanaAsset.symbol}` : ''}`}
+                    </button>
+                </div>
+
+            </div>
+        </div>
     )
 
 
@@ -529,7 +925,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[101]"
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
                     />
 
                     {/* Sidebar */}
@@ -538,15 +934,14 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed inset-y-0 right-0 w-full sm:w-[480px] h-[100dvh] bg-black shadow-2xl z-[102] flex flex-col overflow-hidden"
+                        className="fixed inset-y-0 right-0 w-full sm:w-[480px] h-[100dvh] bg-black shadow-2xl z-[201] flex flex-col overflow-hidden"
                     >
                         {/* Header */}
                         {renderHeader()}
 
                         {currentView === 'Main' ? (
-                            <div className="flex-1 flex flex-col overflow-hidden px-6 pb-20">
-                                {/* Fixed Content Section */}
-                                <div className="shrink-0 space-y-8 pt-8">
+                            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden px-4 pb-20">
+                                <div className="space-y-6 pt-4">
                                     {/* Wallet Card */}
                                     <div className="relative overflow-hidden aspect-[1.8/1] rounded-3xl bg-[#111] border border-white/5 p-8 flex flex-col justify-center">
                                         {/* Background Watermark/Logo */}
@@ -554,12 +949,34 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                             <Image src="/image.png" alt="" width={160} height={160} className="grayscale brightness-200" />
                                         </div>
 
+                                        {/* History icon */}
+                                        <button
+                                            onClick={() => setShowHistory(true)}
+                                            className="absolute top-3 right-3 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-10"
+                                            title="Transaction History"
+                                        >
+                                            <FileClock className="w-4 h-4 text-white/50" />
+                                        </button>
+
                                         <div className="relative z-10 flex flex-col gap-1">
-                                            <h3 className="text-3xl font-bold text-white tracking-tight">
-                                                {parseFloat(userBalances?.usdt || "0").toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USDT
-                                            </h3>
-                                            <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
-                                                <span className="opacity-50">== ~</span> {calculateInr()} ₹
+                                            {assetsLoading ? (
+                                                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mb-2" />
+                                            ) : (
+                                                <>
+                                                    <h3 className="text-3xl font-bold text-white tracking-tight">
+                                                        ${parseFloat(totalUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </h3>
+                                                    {sellRate > 0 && (
+                                                        <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
+                                                            <span className="opacity-50">== ~</span>
+                                                            {(parseFloat(totalUsd) * sellRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₹
+                                                        </p>
+                                                    )}
+                                                </>
+                                            )}
+                                            <p className="text-gray-400 text-xs flex items-center gap-1 font-medium mt-1">
+                                                <span className="opacity-50">Portfolio on</span>
+                                                <span style={{ color: selectedChain.color }}>{selectedChain.name}</span>
                                             </p>
                                         </div>
                                     </div>
@@ -595,86 +1012,81 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                                     </div>
 
                                     <hr className="border-white/5" />
-                                </div>
 
-                                {/* Scrollable History Section */}
-                                <div className="flex-1 flex flex-col min-h-0 mt-2">
-                                    <h4 className="text-center text-xl font-bold text-white mb-6 shrink-0">History</h4>
-
-                                    {/* Tabs */}
-                                    <div className="flex justify-center p-2 rounded-xl gap-4 shrink-0">
-                                        {(['All', 'Deposit', 'Withdraw'] as const).map((tab) => (
-                                            <button
-                                                key={tab}
-                                                onClick={() => setActiveTab(tab)}
-                                                className={`flex-1 py-2 px-2 text-sm font-bold  transition-all ${activeTab === tab
-                                                    ? 'bg-[#6320EE] text-white shadow-lg'
-                                                    : 'text-gray-100 hover:text-white'
-                                                    }`}
-                                            >
-                                                {tab}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* List - This is the only scrollable part */}
-                                    <div className="flex-1 overflow-y-scroll pr-2 space-y-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-[#6320EE]/5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#6320EE]/30 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-[#6320EE]/40">
-                                        {isHistoryLoading ? (
-                                            <div className="flex flex-col items-center justify-center py-8 space-y-3">
-                                                <div className="w-6 h-6 border-2 border-[#6320EE] border-t-transparent rounded-full animate-spin" />
-                                                <p className="text-gray-500 text-xs font-medium">
-                                                    Fetching blockchain data...
-                                                </p>
+                                    {/* Assets */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <span className="text-white font-bold">Assets</span>
+                                                <span className="text-white/40 text-xs ml-2">{selectedChain.name}</span>
                                             </div>
-                                        ) : historyData.length === 0 ? (
-                                            <div className="text-center py-8 border border-dashed border-white/10 rounded-xl">
-                                                <p className="text-gray-500 text-xs">
-                                                    No recent transactions found
-                                                </p>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white/40 text-xs">${totalUsd}</span>
+                                                <button
+                                                    onClick={() => refetchAssets()}
+                                                    className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5 text-white/40" />
+                                                </button>
                                             </div>
-                                        ) : (
-                                            historyData
-                                                .filter(item => {
-                                                    if (activeTab === 'All') return true
-                                                    return item.type === activeTab
-                                                })
-                                                .map((item, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className="flex items-center justify-between p-3 hover:bg-white/[0.07] border border-white/5 rounded-xl transition-all group"
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                {item.type === 'Deposit' ? (
-                                                                    <Image src="/deposit.svg" alt="Deposit" width={16} height={16} className="w-4 h-4 text-green-400" />
-                                                                ) : (
-                                                                    <Image src="/withdraw.svg" alt="Withdraw" width={16} height={16} className="w-4 h-4 text-orange-400" />
-                                                                )}
+                                        </div>
+
+                                        {/* Asset List */}
+                                        <div className="space-y-2">
+                                            {assetsLoading && (
+                                                <div className="flex items-center justify-center py-8">
+                                                    <div className="w-5 h-5 border-2 border-[#622DBF] border-t-transparent rounded-full animate-spin" />
+                                                </div>
+                                            )}
+                                            {!assetsLoading && assets.length === 0 && (
+                                                <div className="text-center py-6 text-white/30 text-sm">
+                                                    No assets on {selectedChain.name}
+                                                </div>
+                                            )}
+                                            {!assetsLoading && assets.map((asset, i) => (
+                                                <div
+                                                    key={`${asset.contractAddress}-${i}`}
+                                                    className="flex items-center justify-between bg-white/5 rounded-xl px-3 py-2.5"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative w-8 h-8 shrink-0">
+                                                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/60">
+                                                                {asset.symbol.slice(0, 3).toUpperCase()}
                                                             </div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-white text-sm font-bold">{item.type}</span>
-                                                            </div>
+                                                            {asset.thumbnail && (
+                                                                <img
+                                                                    src={asset.thumbnail}
+                                                                    alt={asset.symbol}
+                                                                    className="absolute inset-0 w-8 h-8 rounded-full object-cover bg-white/5"
+                                                                    onError={(e) => {
+                                                                        const img = e.target as HTMLImageElement;
+                                                                        // Try 1inch as secondary fallback for EVM tokens
+                                                                        if (asset.contractAddress && !img.src.includes('1inch')) {
+                                                                            img.src = `https://tokens.1inch.io/${asset.contractAddress.toLowerCase()}.png`;
+                                                                        } else {
+                                                                            img.style.display = 'none';
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            )}
                                                         </div>
-
-                                                        <div className="flex items-center gap-3">
-                                                            <span className="text-white text-sm font-bold">
-                                                                {item.amount?.split(' ')[0].slice(0, 8)} USDT
-                                                            </span>
-                                                            <a
-                                                                href={`https://bscscan.com/tx/${item.hash}`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="flex items-center gap-1 text-[#6320EE] hover:text-[#7e45f1] transition-colors font-medium"
-                                                            >
-                                                                <span className="text-xs">Tx Hash</span>
-                                                                <ExternalLink className="w-3 h-3" />
-                                                            </a>
+                                                        <div>
+                                                            <div className="text-white text-sm font-medium">{asset.symbol}</div>
+                                                            <div className="text-white/40 text-xs">{asset.name}</div>
                                                         </div>
                                                     </div>
-                                                ))
-                                        )}
+                                                    <div className="text-right">
+                                                        <div className="text-white text-sm font-medium">
+                                                            {formatBalance(asset.balance, asset.decimals)}
+                                                        </div>
+                                                        <div className="text-white/40 text-xs">{formatUsd(asset.balanceUsd)}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+
+                                    </div>
                             </div>
                         ) : currentView === 'Receive' ? (
                             renderReceiveView()
@@ -682,6 +1094,147 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose, address, smartWa
                             renderSendView()
                         )}
                     </motion.div>
+
+                    {/* History Panel — slides in over the sidebar */}
+                    {showHistory && (
+                        <motion.div
+                            key="history-panel"
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="fixed inset-y-0 right-0 w-full sm:w-[480px] h-[100dvh] bg-black shadow-2xl z-[202] flex flex-col overflow-hidden"
+                        >
+                            {/* Header */}
+                            <div className="relative flex items-center bg-white/5 px-4 py-4 shrink-0">
+                                <button onClick={() => setShowHistory(false)} className="absolute left-4 rounded-full p-1 hover:bg-white/10 transition-colors">
+                                    <ArrowLeft className="w-6 h-6 text-white" />
+                                </button>
+                                <h2 className="text-white text-xl font-bold mx-auto">History</h2>
+                            </div>
+
+                            {/* Chain filter + Type filter tabs */}
+                            <div className="flex items-center justify-between px-4 py-2 shrink-0 border-b border-white/5">
+                                {/* Chain filter */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowHistoryChainDropdown(p => !p)}
+                                        className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1.5 rounded-full text-xs text-white hover:bg-white/10 transition-colors"
+                                    >
+                                        {historyChainFilter === 'all' ? (
+                                            <span>All Chains</span>
+                                        ) : (
+                                            <>
+                                                <img
+                                                    src={CHAIN_CONFIGS.find(c => c.id === historyChainFilter)?.logo}
+                                                    className="w-3.5 h-3.5 rounded-full"
+                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                                />
+                                                <span>{CHAIN_CONFIGS.find(c => c.id === historyChainFilter)?.name}</span>
+                                            </>
+                                        )}
+                                        <ChevronDown className={`w-3 h-3 text-white/40 transition-transform ${showHistoryChainDropdown ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {showHistoryChainDropdown && (
+                                        <div className="absolute top-full mt-1 left-0 w-44 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl">
+                                            <button
+                                                onClick={() => { setHistoryChainFilter('all'); setShowHistoryChainDropdown(false); }}
+                                                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors text-left ${historyChainFilter === 'all' ? 'text-white' : 'text-white/60'}`}
+                                            >
+                                                All Chains
+                                                {historyChainFilter === 'all' && <div className="w-1.5 h-1.5 rounded-full bg-[#622DBF] ml-auto" />}
+                                            </button>
+                                            {CHAIN_CONFIGS.map(chain => (
+                                                <button
+                                                    key={chain.id}
+                                                    onClick={() => { setHistoryChainFilter(chain.id); setShowHistoryChainDropdown(false); }}
+                                                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm hover:bg-white/5 transition-colors text-left ${historyChainFilter === chain.id ? 'text-white bg-white/5' : 'text-white/60'}`}
+                                                >
+                                                    <img src={chain.logo} className="w-4 h-4 rounded-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                                    {chain.name}
+                                                    {historyChainFilter === chain.id && <div className="w-1.5 h-1.5 rounded-full bg-[#622DBF] ml-auto" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Type tabs */}
+                                <div className="flex items-center gap-1">
+                                    {(['All', 'Deposit', 'Withdraw'] as const).map(tab => (
+                                        <button
+                                            key={tab}
+                                            onClick={() => setHistoryTypeFilter(tab)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${historyTypeFilter === tab ? 'bg-[#6320EE] text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+                                        >
+                                            {tab}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden px-4 py-3 space-y-2">
+                                {isHistoryLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 gap-3">
+                                        <div className="w-6 h-6 border-2 border-[#6320EE] border-t-transparent rounded-full animate-spin" />
+                                        <p className="text-white/30 text-xs">Fetching transactions...</p>
+                                    </div>
+                                ) : historyData.filter(item =>
+                                    (historyChainFilter === 'all' || item.chainId === historyChainFilter) &&
+                                    (historyTypeFilter === 'All' || item.type === historyTypeFilter)
+                                ).length === 0 ? (
+                                    <div className="text-center py-12 text-white/30 text-sm">No transactions found</div>
+                                ) : (
+                                    historyData
+                                        .filter(item =>
+                                            (historyChainFilter === 'all' || item.chainId === historyChainFilter) &&
+                                            (historyTypeFilter === 'All' || item.type === historyTypeFilter)
+                                        )
+                                        .map((item, i) => (
+                                            <div key={`${item.hash}-${i}`} className="flex items-center justify-between p-3 hover:bg-white/5 border border-white/5 rounded-xl transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative w-9 h-9 shrink-0">
+                                                        <div className="w-9 h-9 bg-white/5 rounded-xl flex items-center justify-center">
+                                                            {item.type === 'Deposit' ? (
+                                                                <ArrowDownLeft className="w-4 h-4 text-green-400" />
+                                                            ) : item.type === 'Withdraw' ? (
+                                                                <ArrowUpRight className="w-4 h-4 text-orange-400" />
+                                                            ) : (
+                                                                <ExternalLink className="w-4 h-4 text-white/40" />
+                                                            )}
+                                                        </div>
+                                                        {item.chainLogo && (
+                                                            <img
+                                                                src={item.chainLogo}
+                                                                alt={item.chainName}
+                                                                className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-black object-contain"
+                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-white text-sm font-semibold">{item.type}</div>
+                                                        <div className="text-white/30 text-xs">{item.chainName} · {item.date}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2.5">
+                                                    <span className="text-white text-sm font-medium">{item.amount}</span>
+                                                    <a
+                                                        href={item.explorerUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                                                    >
+                                                        <ExternalLink className="w-3.5 h-3.5 text-[#6320EE]" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
                 </>
             )}
         </AnimatePresence>

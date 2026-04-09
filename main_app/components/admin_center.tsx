@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { User } from "lucide-react";
-import { useAccount } from "@particle-network/connectkit";
+import { useAdminSession } from "@/hooks/useAdminSession";
 import { useAdminAPI } from "@/hooks/useAdminAPI";
 import { useUserActivity } from "@/hooks/useUserActivity";
 import { useRates } from "@/hooks/useRates";
@@ -177,7 +177,7 @@ export default function AdminCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { address, chainId } = useAccount();
+  const { address, chainId } = useAdminSession();
   const publicClient = usePublicClient();
   const { makeAdminRequest } = useAdminAPI();
   const isUserActive = useUserActivity(5000);

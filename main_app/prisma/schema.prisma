@@ -11,6 +11,7 @@ model User {
   id                 String    @id @default(cuid())
   walletAddress      String    @unique
   smartWalletAddress String?   @unique
+  solanaAddress      String?   @unique
   role               UserRole  @default(USER)
   upiId              String?
   profileCompleted   Boolean   @default(false)

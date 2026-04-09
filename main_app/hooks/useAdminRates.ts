@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useAccount } from '@particle-network/connectkit'
 
 export function useAdminRates() {
-  const { address } = useAccount()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -13,25 +11,15 @@ export function useAdminRates() {
     buyRate: string,
     sellRate: string
   ) => {
-    if (!address) {
-      throw new Error('Wallet not connected')
-    }
-
     setLoading(true)
     setError(null)
 
     try {
       const response = await fetch('/api/admin/rates', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-wallet-address': address,
-        },
-        body: JSON.stringify({
-          currency,
-          buyRate,
-          sellRate
-        })
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currency, buyRate, sellRate }),
       })
 
       const data = await response.json()
@@ -48,11 +36,7 @@ export function useAdminRates() {
     } finally {
       setLoading(false)
     }
-  }, [address])
+  }, [])
 
-  return {
-    updateRates,
-    loading,
-    error
-  }
+  return { updateRates, loading, error }
 }
