@@ -140,8 +140,8 @@ const config = createConfig({
       ],
       fiatCoin: 'USD',
       promptSettingConfig: {
-        promptMasterPasswordSettingWhenLogin: 1,
-        promptPaymentPasswordSettingWhenSign: 1,
+        promptMasterPasswordSettingWhenLogin: 0,
+        promptPaymentPasswordSettingWhenSign: 0,
       },
     }),
   ],
