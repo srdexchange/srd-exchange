@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "postinstall": "prisma generate",
+    "build": "next build --webpack",
+    "postinstall": "node scripts/patch-antd-v5.mjs && prisma generate",
     "start": "next start",
     "lint": "next lint"
   },
@@ -39,7 +39,7 @@
     "viem": "^2.44.4",
     "wagmi": "^3.3.2"
   },
-  "devDependencies": {
+"devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.19.30",
     "@types/react": "^18.3.27",
