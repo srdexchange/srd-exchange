@@ -73,8 +73,59 @@ function patchPnpmStoreCopies() {
   return patchedFiles;
 }
 
+function findPatchPackageDirs(startDir) {
+  if (!existsSync(startDir)) {
+    return [];
+  }
+
+  const results = [];
+  const queue = [startDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    const entries = readdirSync(currentDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const fullPath = join(currentDir, entry.name);
+
+      if (entry.name === "@ant-design") {
+        const candidate = join(fullPath, "v5-patch-for-react-19");
+        if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+          results.push(candidate);
+        }
+      }
+
+      queue.push(fullPath);
+    }
+  }
+
+  return results;
+}
+
+function patchAllNodeModulesCopies() {
+  const patchedPaths = new Set();
+
+  for (const pkgDir of findPatchPackageDirs(nodeModulesDir)) {
+    for (const relPath of ["es/index.js", "lib/index.js"]) {
+      const filePath = join(pkgDir, relPath);
+      if (!existsSync(filePath)) {
+        continue;
+      }
+
+      writeFileSync(filePath, stubContent);
+      patchedPaths.add(filePath);
+    }
+  }
+
+  return patchedPaths.size;
+}
+
 ensureHoistedStub();
-const patchedFiles = patchPnpmStoreCopies();
+const patchedFiles = patchPnpmStoreCopies() + patchAllNodeModulesCopies();
 console.log(
-  `✅ Patched @ant-design/v5-patch-for-react-19 compatibility stubs (${patchedFiles} pnpm store files)`
+  `✅ Patched @ant-design/v5-patch-for-react-19 compatibility stubs (${patchedFiles} files)`
 );

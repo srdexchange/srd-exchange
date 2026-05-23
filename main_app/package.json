@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/patch-antd-v5.mjs",
     "build": "next build --webpack",
     "postinstall": "node scripts/patch-antd-v5.mjs && prisma generate",
     "start": "next start",
