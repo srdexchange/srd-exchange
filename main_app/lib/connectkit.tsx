@@ -65,7 +65,6 @@ const bscWithCustomRPC = {
   },
 };
 
-function buildConfig(env: ParticleEnv): ConnectKitConfig {
 type ParticleConfig = ReturnType<typeof createConfig>;
 
 function buildConfig(env: ParticleEnv): ParticleConfig {

@@ -698,9 +698,10 @@ export default function QR() {
                   )}
                   </div>
                 </div>
+                <span className="shrink-0 absolute left-10 text-xl font-semibold leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
+
                 <div className="flex min-h-[7.5rem] flex-1 flex-col items-stretch justify-center gap-3 py-3 sm:min-h-[10rem] sm:gap-4 sm:py-6">
                   <div className="flex w-full items-start justify-between gap-2 px-0.5 sm:px-2">
-                    <span className="shrink-0  text-xl font-semibold leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
                     <div className="min-w-0 max-w-[58%] text-right">
                       
                       <p className="truncate pt-0.5 text-[0.78rem] font-semibold text-[#9d76ff] sm:text-[0.9rem]">
@@ -712,6 +713,9 @@ export default function QR() {
                     </div>
                   </div>
                   <div className="flex w-full min-w-0 items-center justify-center px-1">
+                  <span className="shrink-0 absolute right-10 text-xl font-semibold leading-none tracking-[-0.06em] text-white sm:text-[2rem]">USDT</span>
+
+
                     <p
                       className="max-w-full truncate text-center font-medium leading-none tracking-[-0.12em] text-white tabular-nums"
                       style={{ fontSize: displayFontSize }}
