@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
-import dynamic from "next/dynamic";
+import ClientProviders from "@/components/ClientProviders";
 import "./globals.css";
-
-const Providers = dynamic(() => import("@/components/providers"), {
-  ssr: false,
-});
 
 export const metadata: Metadata = {
   title: "Srd Exchange - Decentralized P2P Platform on Bsc Chain",
@@ -19,9 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-montserrat bg-black antialiased">
-        <Providers>
-          {children}
-        </Providers>
+        <ClientProviders>{children}</ClientProviders>
       </body>
     </html>
   )
