@@ -1,7 +1,10 @@
 'use client';
 
 import './particlePolyfills';
-import { ConnectKitProvider, createConfig } from '@particle-network/connectkit';
+import {
+  ConnectKitProvider,
+  createConfig,
+} from '@particle-network/connectkit';
 import { authWalletConnectors } from '@particle-network/connectkit/auth';
 import {
   bsc,
@@ -18,56 +21,25 @@ import {
 import { wallet, EntryPosition } from '@particle-network/connectkit/wallet';
 import React from 'react';
 import { particleAuth } from '@particle-network/auth-core';
-import { aa } from "@particle-network/connectkit/aa";
-// Retrieve environment variables
-let projectId = process.env.NEXT_PUBLIC_PROJECT_ID as string;
-let clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY as string;
-let appId = process.env.NEXT_PUBLIC_APP_ID as string;
+import { aa } from '@particle-network/connectkit/aa';
 
+type ParticleEnv = {
+  projectId: string;
+  clientKey: string;
+  appId: string;
+};
 
+function getParticleEnv(): ParticleEnv | null {
+  const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
+  const clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY;
+  const appId = process.env.NEXT_PUBLIC_APP_ID;
 
-// Validate environment variables
-if (!projectId || !clientKey || !appId) {
-  console.warn(' Particle Network configuration missing!');
-  console.warn('Please set the following environment variables in .env.local:');
-  console.warn('- NEXT_PUBLIC_PROJECT_ID');
-  console.warn('- NEXT_PUBLIC_CLIENT_KEY');
-  console.warn('- NEXT_PUBLIC_APP_ID');
-  console.warn('Get these values from: https://flat.particle.network');
-  console.warn('Using fallback configuration for development...');
-
-  // Fallback values for development
-  projectId = process.env.NEXT_PUBLIC_PROJECT_ID as string;
-  clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY as string;
-  appId = process.env.NEXT_PUBLIC_APP_ID as string;
-}
-
-// IMPORTANT: Create config outside component to prevent re-initialization
-let authCoreInitialized = false;
-
-function ensureAuthCoreInitialized() {
-  if (authCoreInitialized || typeof window === 'undefined') {
-    return;
+  if (!projectId || !clientKey || !appId) {
+    return null;
   }
 
-  try {
-    // AuthCore powers social/email login and its storage helper must be
-    // initialized before ConnectKit touches it. Without this, calls like
-    // getLatestAuthType throw "please init AuthCore first!"
-    particleAuth.init({
-      projectId,
-      clientKey,
-      appId,
-    });
-    authCoreInitialized = true;
-  } catch (error) {
-    console.error('AuthCore failed to initialize', error);
-  }
-
+  return { projectId, clientKey, appId };
 }
-
-
-
 
 // Configure BSC with more reliable RPCs
 const bscWithCustomRPC = {
@@ -93,101 +65,125 @@ const bscWithCustomRPC = {
   },
 };
 
-const config = createConfig({
-  projectId,
-  clientKey,
-  appId,
-  chains: [
-    bscWithCustomRPC,
-    mainnet,
-    base,
-    arbitrum,
-    optimism,
-    polygon,
-    avalanche,
-    scroll,
-    cronos,
-    solana,
-  ],
-  appearance: {
-    splitEmailAndPhone: false,
-    collapseWalletList: false,
-    connectorsOrder: ['email', 'phone', 'social'],
-    language: 'en-US',
-    mode: 'dark',
-    theme: {
-      '--pcm-accent-color': '#622DBF',
-      '--pcm-body-background': '#000000',
-      '--pcm-body-background-secondary': '#000000',
-      '--pcm-body-background-tertiary': '#000000',
-      '--pcm-overlay-background': 'rgba(0, 0, 0, 0.6)',
-      '--pcm-overlay-backdrop-filter': 'blur(8px)',
-      '--pcm-modal-box-shadow': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-    },
-    logo: '/srd.jpg',
-  },
+function buildConfig(env: ParticleEnv): ConnectKitConfig {
+type ParticleConfig = ReturnType<typeof createConfig>;
 
-  walletConnectors: [
-    authWalletConnectors({
-      // Social/email/phone login providers shown in the ConnectKit modal
-      authTypes: [
-        'email',
-        'phone',
-        'google',
-        'facebook',
-        'linkedin',
-        'twitter',
-      ],
-      fiatCoin: 'USD',
-      promptSettingConfig: {
-        promptMasterPasswordSettingWhenLogin: 0,
-        promptPaymentPasswordSettingWhenSign: 0,
+function buildConfig(env: ParticleEnv): ParticleConfig {
+  return createConfig({
+    projectId: env.projectId,
+    clientKey: env.clientKey,
+    appId: env.appId,
+    chains: [
+      bscWithCustomRPC,
+      mainnet,
+      base,
+      arbitrum,
+      optimism,
+      polygon,
+      avalanche,
+      scroll,
+      cronos,
+      solana,
+    ],
+    appearance: {
+      splitEmailAndPhone: false,
+      collapseWalletList: false,
+      connectorsOrder: ['email', 'phone', 'social'],
+      language: 'en-US',
+      mode: 'dark',
+      theme: {
+        '--pcm-accent-color': '#622DBF',
+        '--pcm-body-background': '#000000',
+        '--pcm-body-background-secondary': '#000000',
+        '--pcm-body-background-tertiary': '#000000',
+        '--pcm-overlay-background': 'rgba(0, 0, 0, 0.6)',
+        '--pcm-overlay-backdrop-filter': 'blur(8px)',
+        '--pcm-modal-box-shadow':
+          '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
       },
-    }),
-  ],
-  plugins: [
-    wallet({
-      entryPosition: EntryPosition.BR,
-      visible: false,
-    }),
-    aa({
-      name: "BICONOMY",
-      version: "2.0.0",
-    }),
+      logo: '/srd.jpg',
+    },
+    walletConnectors: [
+      authWalletConnectors({
+        authTypes: ['email', 'phone', 'google', 'facebook', 'linkedin', 'twitter'],
+        fiatCoin: 'USD',
+        promptSettingConfig: {
+          promptMasterPasswordSettingWhenLogin: 0,
+          promptPaymentPasswordSettingWhenSign: 0,
+        },
+      }),
+    ],
+    plugins: [
+      wallet({
+        entryPosition: EntryPosition.BR,
+        visible: false,
+      }),
+      aa({
+        name: 'BICONOMY',
+        version: '2.0.0',
+      }),
+    ],
+  });
+}
 
-  ]
+let authCoreInitialized = false;
 
-});
+function ensureAuthCoreInitialized(env: ParticleEnv) {
+  if (authCoreInitialized || typeof window === 'undefined') {
+    return;
+  }
 
-// Use a singleton pattern to prevent multiple initializations
-let isInitialized = false;
+  particleAuth.init({
+    projectId: env.projectId,
+    clientKey: env.clientKey,
+    appId: env.appId,
+  });
+  authCoreInitialized = true;
+}
+
+function ProviderFallback({ reason }: { reason: string }) {
+  return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 text-center">
+      <div className="max-w-lg space-y-3">
+        <h1 className="text-2xl font-semibold">Wallet services unavailable</h1>
+        <p className="text-sm text-gray-300">{reason}</p>
+      </div>
+    </div>
+  );
+}
 
 export const ParticleConnectkit = ({ children }: React.PropsWithChildren) => {
-  // Ensure AuthCore is ready on first render (needed before ConnectKit hooks run)
-  ensureAuthCoreInitialized();
+  const [config, setConfig] = React.useState<ParticleConfig | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  // Prevent multiple initializations in development mode
   React.useEffect(() => {
-    if (isInitialized) {
-      console.warn('ParticleConnectkit already initialized');
-    }
-    isInitialized = true;
+    const env = getParticleEnv();
 
-    return () => {
-      // Don't reset on cleanup in production
-      if (process.env.NODE_ENV === 'development') {
-        isInitialized = false;
-      }
-    };
+    if (!env) {
+      setError(
+        'Missing Vercel public env vars: NEXT_PUBLIC_PROJECT_ID, NEXT_PUBLIC_CLIENT_KEY, NEXT_PUBLIC_APP_ID.',
+      );
+      return;
+    }
+
+    try {
+      ensureAuthCoreInitialized(env);
+      setConfig(buildConfig(env));
+    } catch (err) {
+      console.error('Failed to initialize Particle Connect:', err);
+      setError('Particle wallet initialization failed.');
+    }
   }, []);
 
-  try {
-    return <ConnectKitProvider config={config}>{children}</ConnectKitProvider>;
-  } catch (error) {
-    console.error('Failed to initialize Particle Connect:', error);
-    console.warn('Falling back to basic provider without wallet integration...');
-    return <div>{children}</div>;
+  if (error) {
+    return <ProviderFallback reason={error} />;
   }
-};
 
-export { config };
+  if (!config) {
+    return (
+      <div className="min-h-screen bg-black" aria-busy="true" />
+    );
+  }
+
+  return <ConnectKitProvider config={config}>{children}</ConnectKitProvider>;
+};
