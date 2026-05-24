@@ -119,7 +119,7 @@ export default function BuySellSection() {
 
                 if (balance < parsedAmount) {
                     throw new Error(
-                        `Insufficient USDT balance in smart account. Required: ${usdtAmount} USDT, Available: ${formatUnits(balance, usdtDecimals)} USDT. The portfolio shows your EOA balance, but sponsored transactions use a separate smart account wallet. Use the "Send" feature to deposit USDT to your smart account (${smartAccountAddr.slice(0, 10)}...).`
+                        `Insufficient USDT balance in smart account. Required: ${usdtAmount} USDT, Available: ${formatUnits(balance, usdtDecimals)} USDT. This trade uses the smart account balance, not the EOA balance. Use the "Send" feature to deposit USDT to your smart account (${smartAccountAddr.slice(0, 10)}...).`
                     );
                 }
                 console.log("✅ Smart account USDT balance sufficient:", {

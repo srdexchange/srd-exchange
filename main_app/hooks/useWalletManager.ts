@@ -243,16 +243,44 @@ export function useWalletManager() {
   const [bnbBalance, setBnbBalance] = useState<bigint | null>(null);
   const [usdtBalance, setUsdtBalance] = useState<bigint | null>(null);
   const [usdtDecimals, setUsdtDecimals] = useState<number | null>(null);
+  const [resolvedSmartWalletAddress, setResolvedSmartWalletAddress] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const balanceAddress = resolvedSmartWalletAddress ?? smartAddress ?? eoaAddress;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isConnected || !smartAccount || !eoaAddress) {
+      setResolvedSmartWalletAddress(null);
+      return;
+    }
+
+    smartAccount
+      .getAccount()
+      .then((account) => {
+        if (cancelled) return;
+        setResolvedSmartWalletAddress(account?.smartAccountAddress ?? null);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.warn("Failed to resolve smart account address:", error);
+          setResolvedSmartWalletAddress(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isConnected, smartAccount, eoaAddress]);
 
   const refetchBnb = async () => {
-    if (!address) return;
+    if (!balanceAddress) return;
 
     try {
       const balance = await retryWithRPCFailover(async (client) => {
-        return await client.getBalance({ address: address as Address });
+        return await client.getBalance({ address: balanceAddress as Address });
       });
 
       if (balance !== null) {
@@ -264,7 +292,7 @@ export function useWalletManager() {
   };
 
   const refetchUsdt = async () => {
-    if (!address || chainId !== bsc.id) return;
+    if (!balanceAddress || chainId !== bsc.id) return;
 
     try {
       const balance = await retryWithRPCFailover(async (client) => {
@@ -272,7 +300,7 @@ export function useWalletManager() {
           address: CONTRACTS.USDT[56],
           abi: USDT_ABI,
           functionName: "balanceOf",
-          args: [address as Address],
+          args: [balanceAddress as Address],
         });
       });
 
@@ -297,16 +325,16 @@ export function useWalletManager() {
   };
 
   useEffect(() => {
-    if (address && chainId === bsc.id) {
+    if (balanceAddress && chainId === bsc.id) {
       refetchBnb();
       refetchUsdt();
     }
-  }, [address, chainId]);
+  }, [balanceAddress, chainId]);
 
   useEffect(() => {
-    if (usdtBalance && address) {
+    if (usdtBalance && balanceAddress) {
       console.log("🔍 USDT Balance Debug:", {
-        address,
+        address: balanceAddress,
         chainId,
         contractAddress: CONTRACTS.USDT[56],
         rawBalance: usdtBalance.toString(),
@@ -318,7 +346,7 @@ export function useWalletManager() {
         as18Decimals: formatUnits(usdtBalance, 18),
       });
     }
-  }, [usdtBalance, usdtDecimals, address, chainId]);
+  }, [usdtBalance, usdtDecimals, balanceAddress, chainId]);
 
   const isOnBSC = chainId === bsc.id;
 
@@ -404,7 +432,7 @@ export function useWalletManager() {
   };
 
   const fetchWalletData = async () => {
-    if (!address || !isConnected) return null;
+    if (!balanceAddress || !isConnected) return null;
 
     if (!walletData) {
       setIsLoading(true);
@@ -438,7 +466,7 @@ export function useWalletManager() {
       }
 
       const walletInfo = {
-        address,
+        address: balanceAddress,
         chainId: bsc.id,
         isOnBSC: true,
         balances: {
@@ -886,12 +914,12 @@ export function useWalletManager() {
   };
 
   useEffect(() => {
-    if (isConnected && address && chainId === bsc.id) {
+    if (isConnected && balanceAddress && chainId === bsc.id) {
       fetchWalletData();
-    } else if (isConnected && address && chainId !== bsc.id) {
+    } else if (isConnected && balanceAddress && chainId !== bsc.id) {
       console.log("⚠️ Not on BSC Mainnet, showing warning state");
       setWalletData({
-        address,
+        address: balanceAddress,
         chainId,
         balances: {
           bnb: { raw: "0", formatted: "0", symbol: "BNB" },
@@ -902,7 +930,7 @@ export function useWalletManager() {
         needsMainnet: true,
       });
     }
-  }, [isConnected, address, chainId, bnbBalance, usdtBalance, usdtDecimals]);
+  }, [isConnected, balanceAddress, chainId, bnbBalance, usdtBalance, usdtDecimals]);
 
   const refetchBalances = async () => {
     if (chainId === bsc.id) {
@@ -1111,7 +1139,7 @@ export function useWalletManager() {
   return {
     address,
     eoaAddress,
-    smartWalletAddress: smartAddress,
+    smartWalletAddress: resolvedSmartWalletAddress ?? smartAddress,
     isConnected,
     isConnecting,
     chainId,
