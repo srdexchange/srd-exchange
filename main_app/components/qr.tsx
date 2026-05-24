@@ -666,7 +666,7 @@ export default function QR() {
             <div className="border-y border-white/10 bg-[#111113] px-4 py-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Image src="/srd.jpg" alt="SRD Exchange" width={34} height={34} className="h-[34px] w-[34px] rounded-full object-cover" />
+                  <Image src="./image.png" alt="SRD Exchange" width={34} height={34} className="h-[34px] w-[34px] rounded-full object-cover" />
                   <h2 id="scan-pay-title" className="text-[1.08rem] font-medium tracking-[-0.02em] text-white/95">
                     {screen === "success" ? "SRD.Exchange" : "Scan & Pay"}
                   </h2>
@@ -684,7 +684,7 @@ export default function QR() {
             {/* Amount Screen */}
             {screen === "amount" && (
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] pt-3 sm:px-4 sm:pb-16 sm:pt-5">
-                <div className="mx-auto flex w-full max-w-full flex-col items-center gap-1 rounded-md bg-[#0c0c0c] px-3 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-5">
+                <div className="mx-auto flex  max-w-full flex-col items-center gap-1 rounded-md  px-3 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-5">
                   <div className="flex flex-row flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                   <p className="text-[0.72rem] font-semibold text-white/80">Available</p>
                   {walletAssetsLoading ? (
@@ -698,31 +698,29 @@ export default function QR() {
                   )}
                   </div>
                 </div>
-                <span className="shrink-0 absolute left-10 text-xl font-semibold leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
 
                 <div className="flex min-h-[7.5rem] flex-1 flex-col items-stretch justify-center gap-3 py-3 sm:min-h-[10rem] sm:gap-4 sm:py-6">
                   <div className="flex w-full items-start justify-between gap-2 px-0.5 sm:px-2">
-                    <div className="min-w-0 max-w-[58%] text-right">
-                      
-                      <p className="truncate pt-0.5 text-[0.78rem] font-semibold text-[#9d76ff] sm:text-[0.9rem]">
-                        + {NETWORK_FEE_USDT.toFixed(2)} USDT fee
-                      </p>
-                      <p className="truncate pt-0.5 text-[0.7rem] font-semibold text-white/90 sm:text-[0.75rem]">
-                        = {usdtTotalAmount} USDT
-                      </p>
-                    </div>
+                    <div className="min-w-0 max-w-[58%] text-right"></div>
                   </div>
-                  <div className="flex w-full min-w-0 items-center justify-center px-1">
-                  <span className="shrink-0 absolute right-10 text-xl font-semibold leading-none tracking-[-0.06em] text-white sm:text-[2rem]">USDT</span>
-
-
+                   <div className="relative flex w-full min-w-0 items-center justify-center gap-[2px] px-1">
+                    <span className="text-xl font-semibold -top-2  left-32 absolute  leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
                     <p
                       className="max-w-full truncate text-center font-medium leading-none tracking-[-0.12em] text-white tabular-nums"
                       style={{ fontSize: displayFontSize }}
                     >
                       {displayAmount}
                     </p>
+                    <div className="absolute inset-y-0 right-1 flex flex-col items-end justify-between py-0.5">
+                      <p className="truncate text-[0.78rem] font-semibold text-[#9d76ff] sm:text-[0.9rem]">
+                        + {NETWORK_FEE_USDT.toFixed(2)} USDT fee
+                      </p>
+                      <p className="truncate text-[0.7rem] font-semibold text-white/90 sm:text-[0.75rem]">
+                        = {usdtTotalAmount} USDT
+                      </p>
+                    </div>
                   </div>
+                  
                 </div>
 
                 {error && (

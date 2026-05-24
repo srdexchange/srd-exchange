@@ -85,7 +85,7 @@ const [selectedAsset, setSelectedAsset] = useState<TokenAsset | null>(null)
     }, [smartAccount, isConnected, eoaAddress])
 
     // Show smart wallet address when available (for EVM), EOA as fallback, Solana for Solana chain
-    const displayAddress = selectedChainId === 101 ? solanaAddress : (smartWalletAddress ?? eoaAddress)
+    const displayAddress = selectedChainId === 101 ? solanaAddress : (smartWalletAddress)
 
     // Fetch balances for smart wallet (where trading happens) — the user only sees this one balance
     const tradingAddress = smartWalletAddress ?? eoaAddress
@@ -443,22 +443,14 @@ const [selectedAsset, setSelectedAsset] = useState<TokenAsset | null>(null)
                                             className="absolute top-full mt-1 right-0 w-56 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl"
                                         >
                                             <div className="px-3 py-2.5 border-b border-white/10 space-y-1.5">
-                                                {smartWalletAddress && smartWalletAddress !== eoaAddress && (
+                                                {smartWalletAddress && (
                                                     <div className="flex items-center justify-between gap-2">
-                                                        <span className="text-[11px] text-white/40 font-medium shrink-0">Smart</span>
                                                         <button onClick={() => copyToClipboard(smartWalletAddress)} className="text-[11px] text-white/70 hover:text-white font-mono truncate">
                                                             {formatAddress(smartWalletAddress)}
                                                         </button>
                                                     </div>
                                                 )}
-                                                {eoaAddress && (
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <span className="text-[11px] text-white/40 font-medium shrink-0">EOA</span>
-                                                        <button onClick={() => copyToClipboard(eoaAddress)} className="text-[11px] text-white/70 hover:text-white font-mono truncate">
-                                                            {formatAddress(eoaAddress)}
-                                                        </button>
-                                                    </div>
-                                                )}
+
                                             </div>
                                             <button
                                                 onClick={handleLogout}
@@ -493,7 +485,8 @@ const [selectedAsset, setSelectedAsset] = useState<TokenAsset | null>(null)
     const renderReceiveView = () => {
         const receiveAddr = receiveMode === 'SOL' ? solanaAddress : displayAddress
         return (
-        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex-1 overflow-y-auto [&::-webkit-
+        bar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="min-h-full flex flex-col items-center justify-center gap-6 px-6 pt-10 pb-28">
 
                 {/* EVM / Solana toggle */}

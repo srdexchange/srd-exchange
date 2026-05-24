@@ -235,6 +235,18 @@ export default function BuySellSection() {
     await Promise.all([refetchBalances(), refetchOrders()]);
   };
 
+  const handleMaxClick = () => {
+    if (walletData?.balances?.usdt?.formatted) {
+      const raw = walletData.balances.usdt.formatted;
+      const n = Number.parseFloat(raw);
+      if (Number.isFinite(n)) {
+        setAmount(n.toFixed(6));
+      } else {
+        setAmount(raw);
+      }
+    }
+  };
+
   const usdtAmount = calculateUSDT(amount);
   const rupeeAmount = calculateRupee(amount);
 
@@ -1148,10 +1160,9 @@ export default function BuySellSection() {
                       <span className="text-gray-500">…</span>
                     ) : displayUsdtBalance !== null ? (
                       <>
-                        w
-                        <span className="block tabular-nums text-white/75">
-                          {displayUsdtBalance} USDT
-                        </span>
+                        <button onClick={handleMaxClick} className="pointer-events-auto text-white/75">
+                         MAX
+                        </button>
                       </>
                     ) : (
                       <span className="text-gray-500">—</span>
