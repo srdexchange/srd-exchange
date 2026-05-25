@@ -17,9 +17,6 @@ export default function Home() {
         <section id="features">
           <FeatureBento/>
         </section>
-        <section id="scan-pay" className="bg-black">
-          <QR />
-        </section>
         <section id="faq">
           <FAQ/>
         </section>
