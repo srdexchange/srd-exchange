@@ -26,8 +26,8 @@ async function sendUserOp(params: {
   args: readonly unknown[];
   value?: bigint;
   skipInitCode?: boolean;
-}, signHash: SignHashFn, chainId: number = 56): Promise<Hex> {
-  const nonce = await getSenderNonce(params.smartAccountAddress, chainId);
+}, signHash: SignHashFn): Promise<Hex> {
+  const nonce = await getSenderNonce(params.smartAccountAddress);
   const callData = encodeSmartAccountExecuteCallData({
     target: params.address,
     abi: params.abi,
@@ -41,14 +41,14 @@ async function sendUserOp(params: {
     callData,
     ownerAddress: params.skipInitCode ? undefined : params.eoaAddress,
   });
-  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress, chainId);
-  const hash = await computeUserOpHash(sponsored, chainId);
+  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress);
+  const hash = await computeUserOpHash(sponsored);
   const rawSignature = await signHash({
     hash,
     smartAccountAddress: params.smartAccountAddress,
-    chainId,
+    chainId: 56,
   });
-  const result = await submitToAlchemyBundler({ ...sponsored, signature: rawSignature }, chainId);
+  const result = await submitToAlchemyBundler({ ...sponsored, signature: rawSignature });
   return result as Hex;
 }
 
@@ -64,7 +64,7 @@ export async function sendSponsoredContractWrite<
   args: readonly unknown[];
   value?: bigint;
   skipInitCode?: boolean;
-}, signHash: SignHashFn, chainId: number = 56): Promise<Hex> {
+}, signHash: SignHashFn): Promise<Hex> {
   return sendUserOp({
     smartAccountAddress: params.smartAccountAddress,
     eoaAddress: params.eoaAddress,
@@ -74,7 +74,7 @@ export async function sendSponsoredContractWrite<
     args: params.args,
     value: params.value,
     skipInitCode: params.skipInitCode,
-  }, signHash, chainId);
+  }, signHash);
 }
 
 export async function sendSponsoredSmartAccountTransaction(params: {
@@ -86,8 +86,8 @@ export async function sendSponsoredSmartAccountTransaction(params: {
     value?: Hex;
   };
   skipInitCode?: boolean;
-}, signHash: SignHashFn, chainId: number = 56): Promise<Hex> {
-  const nonce = await getSenderNonce(params.smartAccountAddress, chainId);
+}, signHash: SignHashFn): Promise<Hex> {
+  const nonce = await getSenderNonce(params.smartAccountAddress);
   const callData = encodeSmartAccountExecuteFromData({
     target: params.transaction.to,
     data: params.transaction.data ?? "0x",
@@ -99,14 +99,14 @@ export async function sendSponsoredSmartAccountTransaction(params: {
     callData,
     ownerAddress: params.skipInitCode ? undefined : params.eoaAddress,
   });
-  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress, chainId);
-  const hash = await computeUserOpHash(sponsored, chainId);
+  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress);
+  const hash = await computeUserOpHash(sponsored);
   const rawSignature = await signHash({
     hash,
     smartAccountAddress: params.smartAccountAddress,
-    chainId,
+    chainId: 56,
   });
-  const result = await submitToAlchemyBundler({ ...sponsored, signature: rawSignature }, chainId);
+  const result = await submitToAlchemyBundler({ ...sponsored, signature: rawSignature });
   return result as Hex;
 }
 
@@ -120,8 +120,7 @@ export async function sendSponsoredContractWriteDetailed(params: {
   args: readonly unknown[];
   skipInitCode?: boolean;
 }, signHash: SignHashFn): Promise<{ userOpHash: `0x${string}`; transactionHash: `0x${string}` }> {
-  const { chainId } = params;
-  const nonce = await getSenderNonce(params.smartAccountAddress, chainId);
+  const nonce = await getSenderNonce(params.smartAccountAddress);
   const callData = encodeSmartAccountExecuteCallData({
     target: params.address,
     abi: params.abi,
@@ -134,14 +133,14 @@ export async function sendSponsoredContractWriteDetailed(params: {
     callData,
     ownerAddress: params.skipInitCode ? undefined : params.eoaAddress,
   });
-  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress, chainId);
-  const userOpHash = await computeUserOpHash(sponsored, chainId);
+  const sponsored = await sponsorViaAlchemy(userOp, params.eoaAddress);
+  const userOpHash = await computeUserOpHash(sponsored);
   const signature = await signHash({
     hash: userOpHash,
     smartAccountAddress: params.smartAccountAddress,
-    chainId,
+    chainId: params.chainId,
   });
-  const bundlerResult = await submitToAlchemyBundler({ ...sponsored, signature }, chainId);
+  const bundlerResult = await submitToAlchemyBundler({ ...sponsored, signature });
 
   return {
     userOpHash,

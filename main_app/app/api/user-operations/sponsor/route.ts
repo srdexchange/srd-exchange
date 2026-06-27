@@ -11,7 +11,8 @@ import {
 } from "@/lib/userOperation";
 import { buildInitCode } from "@/lib/buildInitCode";
 import { encodeAbiParameters, encodeFunctionData, type Address } from "viem";
-import { getServerAlchemyRpcUrl } from "@/lib/chainAlchemy";
+
+const ALCHEMY_RPC_URL = process.env.ALCHEMY_RPC_URL;
 const DEBUG_ENV_PATH = ".dbg/aa23-sponsor-failure.env";
 const DEBUG_RUN_ID = "post-fix";
 const COINBASE_SMART_WALLET_FACTORY = "0xBA5ED110eFDBa3D005bfC882d75358ACBbB85842" as const;
@@ -63,9 +64,9 @@ async function reportDebugEvent(
   }).catch(() => {});
 }
 
-async function getAlchemyCode(address: string, chainId: number): Promise<string | undefined> {
-  const rpcUrl = getServerAlchemyRpcUrl(chainId);
-  const response = await fetch(rpcUrl, {
+async function getAlchemyCode(address: string): Promise<string | undefined> {
+  if (!ALCHEMY_RPC_URL) throw new Error("Missing ALCHEMY_RPC_URL");
+  const response = await fetch(ALCHEMY_RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -80,20 +81,20 @@ async function getAlchemyCode(address: string, chainId: number): Promise<string 
   return json.result as string | undefined;
 }
 
-async function isAccountDeployedViaAlchemy(address: string, chainId: number): Promise<boolean> {
-  const code = await getAlchemyCode(address, chainId);
+async function isAccountDeployedViaAlchemy(address: string): Promise<boolean> {
+  const code = await getAlchemyCode(address);
   return code !== undefined && code !== "0x";
 }
 
-async function getCoinbaseCounterfactualAddress(ownerAddress: Address, chainId: number): Promise<string | undefined> {
-  const rpcUrl = getServerAlchemyRpcUrl(chainId);
+async function getCoinbaseCounterfactualAddress(ownerAddress: Address): Promise<string | undefined> {
+  if (!ALCHEMY_RPC_URL) throw new Error("Missing ALCHEMY_RPC_URL");
   const ownerBytes = encodeAbiParameters([{ type: "address" }], [ownerAddress]);
   const calldata = encodeFunctionData({
     abi: COINBASE_FACTORY_GET_ADDRESS_ABI,
     functionName: "getAddress",
     args: [[ownerBytes], 0n],
   });
-  const response = await fetch(rpcUrl, {
+  const response = await fetch(ALCHEMY_RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -144,15 +145,18 @@ function isParticleFormat(body: unknown): body is { chainId?: number; userOperat
   );
 }
 
+const BNB_CHAIN_ID_HEX_STRICT = "0x38";
+const BNB_CHAIN_ID_STRICT = 56;
+
 function toBigIntLike(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "number") return "0x" + value.toString(16);
   return undefined;
 }
 
-async function handleSponsor(userOp: Record<string, unknown>, chainId: number = BNB_CHAIN_ID): Promise<UserOperation> {
+async function handleSponsor(userOp: Record<string, unknown>): Promise<UserOperation> {
   const sanitized = sanitizeUnsignedUserOperation(userOp as UserOperation);
-  return attachSponsoredPaymasterData(sanitized, chainId);
+  return attachSponsoredPaymasterData(sanitized);
 }
 
 function buildJsonRpcError(id: number | string | null, code: number, message: string) {
@@ -222,7 +226,12 @@ async function handleJsonRpc(req: JsonRpcRequest) {
         chainIdHex = chainIdHex || (meta.chainId as string);
       }
 
-      const rpcChainId = chainIdHex ? parseInt(chainIdHex, 16) : BNB_CHAIN_ID;
+      if (chainIdHex && chainIdHex.toLowerCase() !== BNB_CHAIN_ID_HEX_STRICT) {
+        return NextResponse.json(
+          buildJsonRpcError(id, -32000, `Gas sponsorship is only enabled on BNB Chain (${BNB_CHAIN_ID_STRICT}).`),
+          { status: 400 }
+        );
+      }
 
       const stubUserOp: Record<string, unknown> = {
         ...userOp,
@@ -243,7 +252,7 @@ async function handleJsonRpc(req: JsonRpcRequest) {
       }
 
       try {
-        const sponsored = await attachSponsoredPaymasterData(stubUserOp as UserOperation, rpcChainId);
+        const sponsored = await attachSponsoredPaymasterData(stubUserOp as UserOperation);
         const result: Record<string, unknown> = {
           callGasLimit: sponsored.callGasLimit,
           verificationGasLimit: sponsored.verificationGasLimit,
@@ -295,9 +304,14 @@ async function handleJsonRpc(req: JsonRpcRequest) {
         chainIdHex = meta.chainId as string | undefined;
       }
 
-      const rpcChainId = chainIdHex ? parseInt(chainIdHex, 16) : BNB_CHAIN_ID;
+      if (chainIdHex && chainIdHex.toLowerCase() !== BNB_CHAIN_ID_HEX_STRICT) {
+        return NextResponse.json(
+          buildJsonRpcError(id, -32000, `Gas sponsorship is only enabled on BNB Chain (${BNB_CHAIN_ID_STRICT}).`),
+          { status: 400 }
+        );
+      }
 
-      const sponsored = await attachSponsoredPaymasterData(userOp as UserOperation, rpcChainId);
+      const sponsored = await attachSponsoredPaymasterData(userOp as UserOperation);
 
       const result: Record<string, unknown> = {};
       if (isEntryPointV07UserOperation(sponsored)) {
@@ -326,7 +340,15 @@ async function handleJsonRpc(req: JsonRpcRequest) {
 }
 
 async function handleParticleFormat(body: { chainId?: number; userOperation?: UserOperation; eoaAddress?: string }) {
-  const chainId = body.chainId ?? BNB_CHAIN_ID;
+  if (body.chainId !== undefined && body.chainId !== BNB_CHAIN_ID) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Gas sponsorship is only enabled on BNB Chain (${BNB_CHAIN_ID}).`,
+      },
+      { status: 400 }
+    );
+  }
 
   if (!body.userOperation) {
     return NextResponse.json(
@@ -370,9 +392,9 @@ async function handleParticleFormat(body: { chainId?: number; userOperation?: Us
       const initCodeEmpty = !initCodeStr || initCodeStr === "0x" || initCodeStr.length <= 2;
       try {
         const [deployed, code, expectedSender] = await Promise.all([
-          isAccountDeployedViaAlchemy(sender, chainId),
-          getAlchemyCode(sender, chainId),
-          getCoinbaseCounterfactualAddress(eoaAddress as Address, chainId),
+          isAccountDeployedViaAlchemy(sender),
+          getAlchemyCode(sender),
+          getCoinbaseCounterfactualAddress(eoaAddress as Address),
         ]);
         // #region debug-point B:deployment-and-sender
         await reportDebugEvent(
@@ -427,7 +449,7 @@ async function handleParticleFormat(body: { chainId?: number; userOperation?: Us
 
     let sponsoredUserOperation: UserOperation;
     try {
-      sponsoredUserOperation = await attachSponsoredPaymasterData(sanitized, chainId);
+      sponsoredUserOperation = await attachSponsoredPaymasterData(sanitized);
     } catch (sponsorError) {
       const errMsg = sponsorError instanceof Error ? sponsorError.message : "";
       const isAA23 = errMsg.includes("AA23") || errMsg.includes("sender already created");
@@ -457,7 +479,7 @@ async function handleParticleFormat(body: { chainId?: number; userOperation?: Us
         body.userOperation.initCode = "0x" as any;
         const retrySanitized = sanitizeUnsignedUserOperation(body.userOperation as UserOperation);
         try {
-          sponsoredUserOperation = await attachSponsoredPaymasterData(retrySanitized, chainId);
+          sponsoredUserOperation = await attachSponsoredPaymasterData(retrySanitized);
           console.log("✅ AA23 retry succeeded with empty initCode");
         } catch (retryError) {
           const retryMsg = retryError instanceof Error ? retryError.message : "";
@@ -466,7 +488,7 @@ async function handleParticleFormat(body: { chainId?: number; userOperation?: Us
             console.log("🔧 AA20 on retry (Gas Manager inconsistent), retrying with original initCode");
             body.userOperation.initCode = initCodeStr as any;
             const retrySanitized2 = sanitizeUnsignedUserOperation(body.userOperation as UserOperation);
-            sponsoredUserOperation = await attachSponsoredPaymasterData(retrySanitized2, chainId);
+            sponsoredUserOperation = await attachSponsoredPaymasterData(retrySanitized2);
             console.log("✅ Third attempt succeeded with original initCode");
           } else {
             throw retryError;
