@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useWalletManager } from '@/hooks/useWalletManager'
 import { useChainAssets } from '@/hooks/useChainAssets'
 import { formatBalance, formatUsd, type TokenAsset } from '@/lib/ankrApi'
-import { CHAIN_CONFIGS, getChainById, isBNB, isEvmChain, isSolana, type ChainId } from '@/lib/chainConfig'
+import { CHAIN_CONFIGS, getChainById, isBNB, isSolana, type ChainId } from '@/lib/chainConfig'
 import { sendSponsoredContractWrite, sendSponsoredSmartAccountTransaction } from '@/lib/sponsoredTransactions'
 import { createSignHashWithRetry } from '@/lib/sponsoredSigning'
 
@@ -115,7 +115,6 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
         asset: TokenAsset,
         amount: string,
         recipient: string,
-        chainId: number,
     ): Promise<string> => {
         if (!isAddress(recipient)) throw new Error('Invalid recipient address');
         const amountNum = parseFloat(amount);
@@ -133,7 +132,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                     value: `0x${parseUnits(amount, asset.decimals).toString(16)}` as `0x${string}`,
                 },
                 skipInitCode: shouldSkipInitCode,
-            }, signHashWithRetry, chainId)
+            }, signHashWithRetry)
         }
 
         return sendSponsoredContractWrite({
@@ -144,7 +143,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
             functionName: 'transfer',
             args: [recipient as `0x${string}`, parseUnits(amount, asset.decimals)],
             skipInitCode: shouldSkipInitCode,
-        } as any, signHashWithRetry, chainId)
+        } as any, signHashWithRetry)
     }
 
     const handleSend = async () => {
@@ -154,8 +153,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
         setIsSending(true)
 
         try {
-            const chainId = selectedChain === 'solana' ? 56 : (selectedChain as number)
-            const hash = await sendEVMNormalToken(selectedAsset!, sendAmount, recipientAddress, chainId)
+            const hash = await sendEVMNormalToken(selectedAsset!, sendAmount, recipientAddress)
             setTxHash(hash)
             setSendAmount('')
             setRecipientAddress('')
@@ -303,6 +301,13 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
 
                                 {showWalletDropdown && (
                                     <div className="absolute top-full mt-1 right-0 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl min-w-[160px]">
+                                        <button
+                                            onClick={() => { copyToClipboard(displayAddress); setShowWalletDropdown(false) }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <Copy className="w-4 h-4 text-white/60" />
+                                            <span className="text-white text-sm">Copy Address</span>
+                                        </button>
                                         <button
                                             onClick={() => { handleLogout(); setShowWalletDropdown(false) }}
                                             className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left"
@@ -611,7 +616,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                             </div>
                                             Receive
                                         </button>
-                                        {isEvmChain(selectedChain) ? (
+                                        {isBNB(selectedChain) ? (
                                             <button
                                                 onClick={() => setCurrentView('Send')}
                                                 className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-xl font-bold text-lg transition-all active:scale-95"

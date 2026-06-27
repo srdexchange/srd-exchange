@@ -3,7 +3,6 @@
 import { type Address, type Hex, type Abi, encodeFunctionData, encodeAbiParameters } from "viem";
 import { retryWithRPCFailover } from "./rpcManager";
 import { buildInitCode, COINBASE_SMART_WALLET_FACTORY, COINBASE_SMART_WALLET_FACTORY_ABI } from "./buildInitCode";
-import { getAlchemyRpcUrl } from "./chainAlchemy";
 
 export const ENTRY_POINT_V06 = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
 const COINBASE_SMART_ACCOUNT_ABI = [
@@ -59,34 +58,17 @@ const ENTRY_POINT_ABI = [
   },
 ] as const;
 
-export async function getSenderNonce(sender: Address, chainId: number = 56): Promise<bigint> {
-  const rpcUrl = getAlchemyRpcUrl(chainId)
-  const callData = encodeFunctionData({
-    abi: ENTRY_POINT_ABI,
-    functionName: "getNonce",
-    args: [sender, 0n],
-  })
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "eth_call",
-          params: [{ to: ENTRY_POINT_V06, data: callData }, "latest"],
-        }),
-      })
-      const json = await response.json()
-      if (json.error) throw new Error(json.error.message)
-      return BigInt(json.result)
-    } catch (err) {
-      if (attempt === 2) throw err
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
-    }
-  }
-  throw new Error("Failed to fetch nonce from entry point after retries")
+export async function getSenderNonce(sender: Address): Promise<bigint> {
+  const result = await retryWithRPCFailover(async (client) => {
+    return client.readContract({
+      address: ENTRY_POINT_V06,
+      abi: ENTRY_POINT_ABI,
+      functionName: "getNonce",
+      args: [sender, 0n],
+    });
+  });
+  if (result === null) throw new Error("Failed to fetch nonce from entry point after retries");
+  return result;
 }
 
 export function encodeCallData(abi: Abi, functionName: string, args: readonly unknown[]): Hex {
@@ -180,13 +162,12 @@ export function buildUnsignedUserOp(params: {
 
 export async function sponsorViaAlchemy(
   userOp: Record<string, unknown>,
-  eoaAddress?: Address,
-  chainId?: number
+  eoaAddress?: Address
 ): Promise<Record<string, unknown>> {
   const response = await fetch("/api/user-operations/sponsor", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userOperation: userOp, eoaAddress, chainId }),
+    body: JSON.stringify({ userOperation: userOp, eoaAddress }),
   });
   const responseText = await response.text();
   let data: Record<string, unknown>;
@@ -205,7 +186,7 @@ export async function sponsorViaAlchemy(
   return data.userOperation as Record<string, unknown>;
 }
 
-export async function computeUserOpHash(userOp: Record<string, unknown>, chainId: number = 56): Promise<Hex> {
+export async function computeUserOpHash(userOp: Record<string, unknown>): Promise<Hex> {
   const op = {
     sender: userOp.sender as Address,
     nonce: BigInt(userOp.nonce as string),
@@ -218,41 +199,27 @@ export async function computeUserOpHash(userOp: Record<string, unknown>, chainId
     maxPriorityFeePerGas: BigInt(userOp.maxPriorityFeePerGas as string),
     paymasterAndData: (userOp.paymasterAndData as Hex) ?? "0x",
     signature: "0x" as Hex,
-  } as const;
+  };
 
-  const rpcUrl = getAlchemyRpcUrl(chainId)
-  const callData = encodeFunctionData({
-    abi: ENTRY_POINT_ABI,
-    functionName: "getUserOpHash",
-    args: [op],
-  })
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "eth_call",
-          params: [{ to: ENTRY_POINT_V06, data: callData }, "latest"],
-        }),
-      })
-      const json = await response.json()
-      if (json.error) throw new Error(json.error.message)
-      return json.result as Hex
-    } catch (err) {
-      if (attempt === 2) throw err
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
-    }
-  }
-  throw new Error("Failed to compute userOp hash from entry point")
+  const result = await retryWithRPCFailover(async (client) => {
+    return client.readContract({
+      address: ENTRY_POINT_V06,
+      abi: ENTRY_POINT_ABI,
+      functionName: "getUserOpHash",
+      args: [op],
+    });
+  });
+  if (result === null) throw new Error("Failed to compute userOp hash from entry point");
+  return result;
 }
 
-export async function submitToAlchemyBundler(userOp: Record<string, unknown>, chainId: number = 56): Promise<Hex> {
-  const rpcUrl = getAlchemyRpcUrl(chainId);
+const ALCHEMY_RPC_URL = "https://bnb-mainnet.g.alchemy.com/v2";
 
-  const response = await fetch(rpcUrl, {
+export async function submitToAlchemyBundler(userOp: Record<string, unknown>): Promise<Hex> {
+  const apiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+  if (!apiKey) throw new Error("Missing NEXT_PUBLIC_ALCHEMY_API_KEY");
+
+  const response = await fetch(`${ALCHEMY_RPC_URL}/${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -282,9 +249,10 @@ export function buildDeployTxData(ownerAddress: Address) {
   };
 }
 
-export async function broadcastRawTx(rawTx: Hex, chainId: number = 56): Promise<Hex> {
-  const rpcUrl = getAlchemyRpcUrl(chainId);
-  const response = await fetch(rpcUrl, {
+export async function broadcastRawTx(rawTx: Hex): Promise<Hex> {
+  const apiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
+  if (!apiKey) throw new Error("Missing NEXT_PUBLIC_ALCHEMY_API_KEY");
+  const response = await fetch(`${ALCHEMY_RPC_URL}/${apiKey}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
