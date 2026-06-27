@@ -3,9 +3,9 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import { encodeAbiParameters } from "viem";
 import { UserOperation, isEntryPointV07UserOperation, isHexString } from "@/lib/userOperation";
+import { getServerAlchemyRpcUrl, getAlchemyChainIdHex } from "@/lib/chainAlchemy";
 
-const BNB_CHAIN_ID = 56;
-const BNB_CHAIN_ID_HEX = "0x38";
+export const BNB_CHAIN_ID = 56;
 const DEFAULT_DUMMY_SIGNATURE =
   "0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c";
 const COINBASE_SIGNATURE_WRAPPER_ABI = [
@@ -160,11 +160,12 @@ const parseGasManagerResponse = (
   };
 };
 
-// Calls Alchemy Gas Manager to fill the paymaster fields for a BNB user operation.
+// Calls Alchemy Gas Manager to fill the paymaster fields for a user operation.
 export async function attachSponsoredPaymasterData(
-  userOp: UserOperation
+  userOp: UserOperation,
+  chainId: number = BNB_CHAIN_ID
 ): Promise<UserOperation> {
-  const rpcUrl = getRequiredEnv("ALCHEMY_RPC_URL");
+  const rpcUrl = getServerAlchemyRpcUrl(chainId);
   const policyId = getRequiredEnv("ALCHEMY_POLICY_ID");
   const entryPoint = getRequiredEnv("ENTRY_POINT");
 
@@ -175,7 +176,7 @@ export async function attachSponsoredPaymasterData(
     params: [
       {
         policyId,
-        chainId: BNB_CHAIN_ID_HEX,
+        chainId: getAlchemyChainIdHex(chainId),
         entryPoint,
         dummySignature: getSimulationSignature(userOp.signature),
         userOperation: userOp,
@@ -272,4 +273,4 @@ export async function attachSponsoredPaymasterData(
   return parseGasManagerResponse(userOp, json.result);
 }
 
-export { BNB_CHAIN_ID, BNB_CHAIN_ID_HEX };
+

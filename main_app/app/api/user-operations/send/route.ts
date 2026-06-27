@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { BNB_CHAIN_ID } from "@/lib/server/alchemyPaymaster";
 import { submitSponsoredUserOp } from "@/lib/server/sendUserOp";
 import { UserOperation } from "@/lib/userOperation";
 
@@ -10,13 +9,6 @@ export async function POST(request: NextRequest) {
       chainId?: number;
       userOperation?: UserOperation;
     };
-
-    if (body.chainId !== undefined && body.chainId !== BNB_CHAIN_ID) {
-      return NextResponse.json(
-        { success: false, error: `Bundler send is only enabled on BNB Chain (${BNB_CHAIN_ID}).` },
-        { status: 400 }
-      );
-    }
 
     if (!body.userOperation) {
       return NextResponse.json(
