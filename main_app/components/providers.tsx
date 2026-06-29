@@ -1,6 +1,10 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { CDPReactProvider } from '@coinbase/cdp-react';
+
+import {
+  CDPReactProvider,
+} from '@coinbase/cdp-react';
+
 import FontProvider from './FontProvider';
 import { ReactNode } from 'react';
 import { SidebarProvider } from '@/context/SidebarContext';
@@ -18,9 +22,11 @@ export default function Providers({ children }: { children: ReactNode }) {
     <CDPReactProvider
       config={{
         projectId: process.env.NEXT_PUBLIC_CDP_PROJECT_ID!,
+        appLogoUrl: 'https://srd.exchange/srd_final.svg',
         appName: 'SRD Exchange',
         ethereum: { createOnLogin: "smart" },
-        authMethods: ["sms", "oauth:google", "oauth:telegram", "oauth:apple", "oauth:x"],
+        authMethods: ["sms","email",  "oauth:google", "oauth:telegram", "oauth:apple", "oauth:x", ],
+        showCoinbaseFooter: false,
       }}
       theme={{
         "colors-bg-default": "#111111",
