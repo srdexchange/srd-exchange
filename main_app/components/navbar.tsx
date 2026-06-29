@@ -1,35 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
-import { SignInModal, SignInModalContent } from '@coinbase/cdp-react';
-import { useWalletManager } from '@/hooks/useWalletManager';
-import { LogOut, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const { isSignedIn } = useIsSignedIn();
-  const { address } = useWalletManager();
-  const { signOut } = useSignOut();
   const router = useRouter();
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
 
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
@@ -42,36 +20,8 @@ export default function Navbar() {
     }
   };
 
-  const handleConnectWallet = () => {
-    if (!isSignedIn) {
-      const hasAcceptedTerms = localStorage.getItem('terms_accepted_global');
-      
-      if (!hasAcceptedTerms) {
-        setShowTermsModal(true);
-      } else {
-        setWalletModalOpen(true);
-      }
-    }
-  };
-
-  const handleAcceptTerms = () => {
-    localStorage.setItem('terms_accepted_global', 'true');
-    setShowTermsModal(false);
-    setWalletModalOpen(true);
-  };
-
-  const handleDisconnect = () => {
-    signOut();
-    setShowUserMenu(false);
-  };
-
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const formatAddress = (addr: string | undefined) => {
-    if (!addr) return '';
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const navLinks = [
@@ -274,130 +224,7 @@ export default function Navbar() {
                   </nav>
                 </div>
 
-                <div className="p-6 border-t border-gray-800">
-                    <motion.button
-                      onClick={() => {
-                        handleConnectWallet();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="w-full bg-[#622DBF] text-white px-6 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg font-montserrat"
-                      initial={{ opacity: 0, y: 50 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <span className="text-base tracking-wide font-montserrat">
-                        CONNECT WALLET
-                      </span>
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M13 7l5 5m0 0l-5 5m5-5H6"
-                        />
-                      </svg>
-                    </motion.button>
-                </div>
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Sign In Modal (controlled) */}
-      <SignInModal open={walletModalOpen} setIsOpen={setWalletModalOpen}>
-        <span />
-        <SignInModalContent />
-      </SignInModal>
-
-      {/* Terms Agreement Modal */}
-      <AnimatePresence>
-        {showTermsModal && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowTermsModal(false)}
-            />
-
-            {/* Modal Card */}
-            <motion.div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.div
-                className="bg-[#1A1A1A] border border-gray-700 rounded-xl shadow-2xl max-w-md w-full p-6 pointer-events-auto font-montserrat"
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.9, y: 20 }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Icon */}
-                <div className="flex justify-center mb-4">
-                  <div className="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center">
-                    <svg
-                      className="w-8 h-8 text-purple-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Title */}
-                <h2 className="text-2xl font-bold text-white text-center mb-3">
-                  Terms & Conditions
-                </h2>
-
-                {/* Message */}
-                <p className="text-gray-300 text-center mb-6 leading-relaxed">
-                  By connecting your wallet, you are agreeing to our{' '}
-                  <button
-                    onClick={() => {
-                      setShowTermsModal(false);
-                      router.push('/terms-and-conditions');
-                    }}
-                    className="text-purple-400 hover:text-purple-300 underline font-medium"
-                  >
-                    Terms and Conditions
-                  </button>
-                  .
-                </p>
-
-                {/* Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    onClick={() => setShowTermsModal(false)}
-                    className="flex-1 px-6 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAcceptTerms}
-                    className="flex-1 px-6 py-3 rounded-lg bg-[#622DBF] hover:bg-purple-700 text-white transition-colors font-bold shadow-lg hover:shadow-purple-600/40"
-                  >
-                    Accept & Connect
-                  </button>
-                </div>
-              </motion.div>
             </motion.div>
           </>
         )}

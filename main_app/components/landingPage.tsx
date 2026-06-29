@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useIsSignedIn } from '@coinbase/cdp-hooks';
 import { SignInModal, SignInModalContent } from '@coinbase/cdp-react';
@@ -22,12 +22,6 @@ export default function LandingPage() {
 
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (isSignedIn) {
-      router.push('/fiat');
-    }
-  }, [isSignedIn, router]);
 
   const handleTradeNow = () => {
     if (isSignedIn) {
@@ -272,7 +266,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* Updated Trade Now Button */}
+        {/* Trade Now Button */}
         <SignInModal open={walletModalOpen} setIsOpen={setWalletModalOpen}>
           <motion.button
             onClick={handleTradeNow}

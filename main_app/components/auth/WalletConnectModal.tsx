@@ -2,11 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useIsSignedIn } from '@coinbase/cdp-hooks';
-import {
-  SignInModal,
-  SignInModalContent,
-} from '@coinbase/cdp-react';
+
 import {
   X,
   Wallet,
@@ -27,7 +23,6 @@ export default function WalletConnectModal({
   onClose,
   onSuccess,
 }: WalletConnectModalProps) {
-  const { isSignedIn } = useIsSignedIn();
   const { address, walletData, fetchWalletData } = useWalletManager();
   const router = useRouter();
 
@@ -41,12 +36,6 @@ export default function WalletConnectModal({
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
-
-  useEffect(() => {
-    if (isSignedIn && address) {
-      handleWalletConnected();
-    }
-  }, [isSignedIn, address]);
 
   const handleWalletConnected = async () => {
     if (!address) return;
@@ -264,13 +253,6 @@ export default function WalletConnectModal({
 
             {/* Content */}
             <div className={isMobile ? "p-4" : "p-4 sm:p-6"}>
-              {/* CDP Sign In Modal */}
-              <div className="w-full">
-                <SignInModal open={isOpen} setIsOpen={(open) => { if (!open) onClose(); }}>
-                  <SignInModalContent />
-                </SignInModal>
-              </div>
-
               {/* Terms and Conditions Checkbox */}
               <motion.div
                 className="mt-4"
