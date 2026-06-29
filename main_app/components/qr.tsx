@@ -281,7 +281,7 @@ export default function QR() {
     if (screen !== "pending" || !transactionData?.fullId) return;
 
     void refreshTransactionStatus(false);
-    
+
     // Countdown timer for refresh
     const countdownInterval = window.setInterval(() => {
       setCountdown((prev) => (prev <= 1 ? ORDER_REFRESH_MS / 1000 : prev - 1));
@@ -348,7 +348,7 @@ export default function QR() {
     setScanError("");
     setIsScannerLoading(true);
     console.log("🎥 Starting QR scanner...");
-    
+
     try {
       // Ensure any previous instance is dead
       await stopScan();
@@ -460,7 +460,7 @@ export default function QR() {
   const handleUpiScanned = async (upiId: string) => {
     setScannedUpiId(upiId);
     const currentTransaction = activeTransactionRef.current || transactionData;
-    
+
     if (currentTransaction?.fullId) {
       try {
         console.log(`📤 Saving merchant UPI on QR transaction ${currentTransaction.fullId}: ${upiId}`);
@@ -469,7 +469,7 @@ export default function QR() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scannedUpiId: upiId }),
         });
-        
+
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || "Failed to save merchant UPI");
@@ -477,10 +477,10 @@ export default function QR() {
 
         const data = await res.json();
         console.log("✅ QR transaction updated with merchant UPI", data.transaction);
-        
+
         activeTransactionRef.current = data.transaction;
         setTransactionData(data.transaction);
-        
+
         setScreen("pending");
         void refreshTransactionStatus(false);
       } catch (err: any) {
@@ -688,16 +688,16 @@ export default function QR() {
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] pt-3 sm:px-4 sm:pb-16 sm:pt-5">
                 <div className="mx-auto flex  max-w-full flex-col items-center gap-1 rounded-md  px-3 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:px-5">
                   <div className="flex flex-row flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
-                  <p className="text-[0.72rem] font-semibold text-white/80">Available</p>
-                  {walletAssetsLoading ? (
-                    <p className="text-[0.78rem] font-medium text-white/60">Loading balance...</p>
-                  ) : walletAssetsError ? (
-                    <p className="text-[0.78rem] font-medium text-red-300">{walletAssetsError}</p>
-                  ) : (
-                    <p className="text-[0.7rem] font-medium text-white/55">
-                      {formatBalance(usdtAsset?.balance || "0", usdtAsset?.decimals)} USDT
-                    </p>
-                  )}
+                    <p className="text-[0.72rem] font-semibold text-white/80">Available</p>
+                    {walletAssetsLoading ? (
+                      <p className="text-[0.78rem] font-medium text-white/60">Loading balance...</p>
+                    ) : walletAssetsError ? (
+                      <p className="text-[0.78rem] font-medium text-red-300">{walletAssetsError}</p>
+                    ) : (
+                      <p className="text-[0.7rem] font-medium text-white/55">
+                        {formatBalance(usdtAsset?.balance || "0", usdtAsset?.decimals)} USDT
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -705,10 +705,10 @@ export default function QR() {
                   <div className="flex w-full items-start justify-between gap-2 px-0.5 sm:px-2">
                     <div className="min-w-0 max-w-[58%] text-right"></div>
                   </div>
-                   <div className="relative flex w-full min-w-0 items-center justify-center gap-[2px] px-1">
-                    <span className="text-xl font-semibold -top-2  left-32 absolute  leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
+                  <div className="relative flex w-full min-w-0 items-center justify-center gap-[2px] px-1">
+                    <span className="text-xl font-semibold -top-2  left-30 absolute  leading-none tracking-[-0.06em] text-white sm:text-[2rem]">₹</span>
                     <p
-                      className="max-w-full truncate text-center font-medium leading-none tracking-[-0.12em] text-white tabular-nums"
+                      className="max-w-full truncate text-center font-medium leading-none text-white tabular-nums"
                       style={{ fontSize: displayFontSize }}
                     >
                       {displayAmount}
@@ -722,7 +722,7 @@ export default function QR() {
                       </p>
                     </div>
                   </div>
-                  
+
                 </div>
 
                 {error && (
@@ -743,11 +743,14 @@ export default function QR() {
                   </div>
                 )}
 
+
+
                 <div className="mb-3 flex shrink-0 items-center gap-2 rounded-[0.2rem] border border-white/5 bg-[#171717] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:mb-4 sm:px-4 sm:py-3">
                   <AlertCircle className="h-5 w-5 shrink-0 fill-[#f14336] text-black sm:h-6 sm:w-6" />
                   <p className="text-[0.72rem] leading-5 text-white/80 sm:text-[0.78rem]">
                     Please only Ask Bill/payable Amount, Don&apos;t ask QR!
                   </p>
+
                 </div>
                 <button
                   type="button"

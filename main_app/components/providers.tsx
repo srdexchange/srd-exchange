@@ -1,8 +1,10 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import {
   CDPReactProvider,
 } from '@coinbase/cdp-react';
+
 import FontProvider from './FontProvider';
 import { ReactNode } from 'react';
 import { SidebarProvider } from '@/context/SidebarContext';

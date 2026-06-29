@@ -13,6 +13,7 @@ import {
     RefreshCw,
     FileClock,
     ChevronDown,
+    Flame,
 } from 'lucide-react'
 import { FC, useState, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -50,22 +51,24 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
     const [showAssetDropdown, setShowAssetDropdown] = useState(false)
     const [showChainDropdown, setShowChainDropdown] = useState(false)
     const [showWalletDropdown, setShowWalletDropdown] = useState(false)
+    const [receiveMode, setReceiveMode] = useState<'EVM' | 'SOL'>('EVM')
+    const [selectedChainId, setSelectedChainId] = useState<number>(56)
 
     const { isSignedIn } = useIsSignedIn()
     const { signOut } = useSignOut()
     const router = useRouter()
 
     const {
-      address,
-      eoaAddress,
-      smartWalletAddress,
-      solanaAddress,
-      selectedChain,
-      selectedAddress,
-      isConnected,
-      signHash,
-      shouldSkipInitCode,
-      switchChain,
+        address,
+        eoaAddress,
+        smartWalletAddress,
+        solanaAddress,
+        selectedChain,
+        selectedAddress,
+        isConnected,
+        signHash,
+        shouldSkipInitCode,
+        switchChain,
     } = useWalletManager()
 
     const chainDropdownRef = useRef<HTMLDivElement>(null)
@@ -257,14 +260,13 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                 </button>
 
                                 {showChainDropdown && (
-                                    <div className="absolute top-full mt-1 right-0 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl min-w-[160px]">
+                                    <div className="absolute top-full mt-1 -right-18 bg-[#111] border border-white/10 rounded-xl overflow-hidden z-50 shadow-xl min-w-[160px]">
                                         {CHAIN_CONFIGS.map(chain => (
                                             <button
                                                 key={chain.id}
                                                 onClick={() => { switchChain(chain.id); setShowChainDropdown(false) }}
-                                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left ${
-                                                    chain.id === selectedChain ? 'bg-white/5' : ''
-                                                }`}
+                                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left ${chain.id === selectedChain ? 'bg-white/5' : ''
+                                                    }`}
                                             >
                                                 <img
                                                     src={chain.logo}
@@ -338,13 +340,57 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
     }
 
     const renderReceiveView = () => {
-        const receiveAddr = isSolana(selectedChain) ? (solanaAddress ?? '') : (smartWalletAddress ?? address ?? '')
-        const chainLabel = isSolana(selectedChain) ? 'Solana' : chainConfig.name + '-compatible'
+        const isSolReceive = receiveMode === 'SOL'
+        const receiveAddr = isSolReceive ? (solanaAddress ?? '') : (smartWalletAddress ?? address ?? '')
+        const receiveChainId = isSolReceive ? 'solana' : selectedChainId
+        const receiveChainConfig = getChainById(receiveChainId)
+        const chainLabel = isSolReceive ? 'Solana' : (receiveChainConfig?.name ?? '') + '-compatible'
         return (
             <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden animate-in fade-in slide-in-from-right-4 duration-300">
                 <div className="min-h-full flex flex-col items-center justify-center gap-6 px-6 pt-10 pb-28">
+                    <div className="w-full flex items-center justify-between">
+                    <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                        {(['EVM', 'SOL'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => {
+                                    setReceiveMode(mode);
+                                    if (mode === 'EVM' && selectedChainId === 101) setSelectedChainId(56);
+                                    if (mode === 'SOL') setSelectedChainId(101);
+                                }}
+                                disabled={mode === 'SOL' && !solanaAddress}
+                                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${receiveMode === mode ? 'bg-[#6320EE] text-white' : 'text-white/40 hover:text-white/70'} disabled:opacity-30 disabled:cursor-not-allowed`}
+                            >
+                                {mode === 'SOL' ? 'Solana' : 'EVM'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Stacked chain logos */}
+                    <div className="flex items-center">
+                        {CHAIN_CONFIGS.filter(c => receiveMode === 'SOL' ? c.id === 101 : c.id !== 101).map((chain, i, arr) => (
+                            <div
+                                key={chain.id}
+                                className="w-6 h-6 rounded-full border-2 border-black overflow-hidden bg-black shrink-0"
+                                style={{ marginLeft: i === 0 ? 0 : '-8px', zIndex: arr.length - i }}
+                                title={chain.name}
+                            >
+                                <img
+                                    src={chain.logo}
+                                    alt={chain.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        const el = e.target as HTMLImageElement
+                                        el.style.display = 'none'
+                                        el.parentElement!.style.background = chain.color
+                                    }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
                     <p className="text-white/30 text-xs text-center">
-                        All {chainLabel} <span className="text-yellow-400 font-medium">tokens</span> can be securely deposited into this address
+                        All EVM Compatible <span className="text-yellow-400 font-medium">tokens</span> can be securely deposited into this address
                     </p>
 
                     <div className="p-5 bg-white rounded-3xl shadow-2xl">
@@ -353,7 +399,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
 
                     <div className="w-full space-y-2">
                         <p className="text-gray-500 text-sm font-medium text-center">
-                            Your {chainConfig.name} Address
+                            Your Smart Wallet Address
                         </p>
                         <div
                             onClick={() => copyToClipboard(receiveAddr)}
@@ -439,6 +485,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                             )}
                         </button>
 
+
                         <AnimatePresence>
                             {showAssetDropdown && assets.length > 0 && (
                                 <motion.div
@@ -476,7 +523,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                                 <div className="text-white/60 text-xs">{formatBalance(asset.balance, asset.decimals)}</div>
                                                 <div className="text-white/30 text-xs">{formatUsd(asset.balanceUsd)}</div>
                                             </div>
-                                            
+
                                         </button>
                                     ))}
                                 </motion.div>
@@ -584,6 +631,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                         </button>
 
                                         <div className="relative z-10 flex flex-col gap-1">
+                                            <p className='text-gray-400  text-lg flex items-center gap-2 font-medium'> Avalable balance</p>
                                             {assetsLoading ? (
                                                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mb-2" />
                                             ) : (
@@ -593,8 +641,8 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                                     </h3>
                                                     {sellRate > 0 && (
                                                         <p className="text-gray-400 text-lg flex items-center gap-2 font-medium">
-                                                            <span className="opacity-50">== ~</span>
-                                                            {(parseFloat(totalUsd) * sellRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₹
+                                                            <span className="opacity-50">~ ₹</span>
+                                                            {(parseFloat(totalUsd) * sellRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </p>
                                                     )}
                                                 </>
@@ -616,7 +664,9 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                             </div>
                                             Receive
                                         </button>
-                                        {isBNB(selectedChain) ? (
+
+                                        {isEvmChain(selectedChain) && selectedChain !== 43114 ? (
+
                                             <button
                                                 onClick={() => setCurrentView('Send')}
                                                 className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-xl font-bold text-lg transition-all active:scale-95"
@@ -635,6 +685,15 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                             </div>
                                         )}
                                     </div>
+
+                                    {isEvmChain(selectedChain) && (
+                                        <div className="flex justify-center">
+                                            <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-green-500/30 bg-green-500/10 text-[#00FF5E] text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(0,255,94,0.1)]">
+                                                <Flame className="w-4 h-4 fill-current" />
+                                                Gasless Transaction
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <hr className="border-white/5" />
 
