@@ -508,7 +508,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
     const renderReceiveView = () => {
         const isSolReceive = receiveMode === 'SOL'
         const receiveAddr = isSolReceive ? (solanaAddress ?? '') : (smartWalletAddress ?? address ?? '')
-        const receiveChainId = isSolReceive ? 'solana' : selectedChainId
+        const receiveChainId = isSolReceive ? 792703809 : selectedChainId
         const receiveChainConfig = getChainById(receiveChainId)
         const chainLabel = isSolReceive ? 'Solana' : (receiveChainConfig?.name ?? '') + '-compatible'
         return (
@@ -830,7 +830,7 @@ const RightSidebar: FC<RightSidebarProps> = ({ isOpen, onClose }) => {
                                             </div>
                                             Receive
                                         </button>
-                                        {isEvmChain(selectedChain) || selectedChain === 'solana' ? (
+                                        {isEvmChain(selectedChain) || isSolana(selectedChain) ? (
                                             <button
                                                 onClick={() => setCurrentView('Send')}
                                                 className="flex items-center justify-center gap-2 bg-[#6320EE] hover:bg-[#5219d1] text-white py-4 rounded-xl font-bold text-lg transition-all active:scale-95"
