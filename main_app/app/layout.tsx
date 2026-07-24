@@ -22,8 +22,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Srd Exchange - Decentralized P2P Platform on Bsc Chain",
-  description: "Secure peer-to-peer USDT trading platform on Binance Smart Chain",
+  title: "Srd Exchange-Trade Anything OnChain",
+  description: "Trade Anything OnChain",
 };
 
 export default function RootLayout({

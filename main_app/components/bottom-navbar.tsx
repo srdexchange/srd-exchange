@@ -9,7 +9,7 @@ import Image from 'next/image';
 
 const BottomNavbar = () => {
     const pathname = usePathname();
-    const { openSidebar, closeSidebar } = useSidebar();
+    const { isSidebarOpen, openSidebar, closeSidebar } = useSidebar();
 
     const navItems = [
         {
@@ -44,7 +44,7 @@ const BottomNavbar = () => {
                 className="bg-black/90 backdrop-blur-2xl border-t border-white/10 w-full flex items-center justify-between py-2 px-4 md:px-12 lg:px-20 shadow-[0_-8px_32px_rgba(0,0,0,0.5)]"
             >
                 {navItems.map((item) => {
-                    const isActive = pathname === item.href;
+                    const isActive = item.isAction ? isSidebarOpen : pathname === item.href;
 
                     const content = (
                         <motion.div
